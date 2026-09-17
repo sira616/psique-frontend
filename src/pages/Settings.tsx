@@ -10,7 +10,10 @@ import {
   type MyProfile,
   type ProfileUpdate,
 } from '@/api/profile'
+import { activeRestriction, formatRestrictedUntil, revokeAdult } from '@/api/policy'
+import { AccountDataSettings } from '@/features/account/AccountDataSettings'
 import { StoryField } from '@/features/customStories/StoryField'
+import { AdultConfirmDialog } from '@/features/policy/AdultConfirmDialog'
 import { ProfileImageField } from '@/features/profile/ProfileImageField'
 import {
   PROFILE_FIELD_ORDER,
@@ -32,7 +35,9 @@ type FieldErrors = Partial<Record<string, string>>
 const SECTIONS = [
   { id: 'perfil', label: 'Perfil' },
   { id: 'privacidad', label: 'Privacidad' },
+  { id: 'contenido', label: 'Contenido +18' },
   { id: 'cuenta', label: 'Cuenta' },
+  { id: 'datos', label: 'Tus datos' },
 ] as const
 
 function valuesFrom(profile: MyProfile): ProfileFormValues {
@@ -266,11 +271,64 @@ function PrivacySettings({ profile, onSaved, announce }: { profile: MyProfile; o
   )
 }
 
+function AdultSettings({ announce }: { announce: Announce }) {
+  const queryClient = useQueryClient()
+  const confirmed = useAuthStore((s) => s.user?.adultConfirmed ?? false)
+  const [asking, setAsking] = useState(false)
+
+  const revoke = useMutation({
+    mutationFn: revokeAdult,
+    onSuccess: () => {
+      for (const queryKey of [['book'], ['explore'], ['characters'], ['profile']]) {
+        void queryClient.invalidateQueries({ queryKey })
+      }
+      announce('Has retirado la confirmación. Los libros +18 dejan de mostrarse.')
+    },
+  })
+
+  return (
+    <div className="space-y-3">
+      <p id="contenido-estado" className="text-body-sm text-ink">
+        <span className="font-semibold">Estado: </span>
+        {confirmed ? 'has confirmado que eres mayor de edad.' : 'no has confirmado que eres mayor de edad.'}
+      </p>
+      <p className="text-body-sm text-ink-dim">
+        {confirmed
+          ? 'Ves y puedes leer las historias +18. Si retiras la confirmación, dejarán de aparecer en Explorar y se te volverá a preguntar antes de leerlas.'
+          : 'Las historias +18 no aparecen en Explorar y se te preguntará antes de leer una. En todas, las escenas íntimas se cierran con un fundido a negro.'}
+      </p>
+      {revoke.isError ? (
+        <p role="alert" className="text-[13px] text-error">
+          {profileGeneralError(revoke.error, 'No se pudo retirar la confirmación. Inténtalo de nuevo.')}
+        </p>
+      ) : null}
+      {confirmed ? (
+        <Button variant="outline" disabled={revoke.isPending} onClick={() => revoke.mutate()} aria-describedby="contenido-estado">
+          {revoke.isPending ? 'Retirando…' : 'Retirar confirmación'}
+        </Button>
+      ) : (
+        <Button variant="brand" onClick={() => setAsking(true)} aria-describedby="contenido-estado">
+          Confirmar que soy mayor de edad
+        </Button>
+      )}
+      <AdultConfirmDialog
+        open={asking}
+        onCancel={() => setAsking(false)}
+        onConfirmed={() => {
+          setAsking(false)
+          announce('Confirmado: eres mayor de edad y ya puedes ver las historias +18.')
+        }}
+      />
+    </div>
+  )
+}
+
 export function SettingsPage() {
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
   const patchUser = useAuthStore((s) => s.patchUser)
   const profile = useQuery({ queryKey: myProfileQueryKey, queryFn: fetchMyProfile })
+  const restrictedUntil = activeRestriction(user?.restrictedUntil)
   const [status, setStatus] = useState('')
 
   function announce(message: string) {
@@ -342,6 +400,14 @@ export function SettingsPage() {
             </>
           ) : null}
 
+          <SettingsSection
+            id="contenido"
+            title="Contenido +18"
+            description="Confirma tu mayoría de edad para ver y leer historias marcadas como +18."
+          >
+            <AdultSettings announce={announce} />
+          </SettingsSection>
+
           <SettingsSection id="cuenta" title="Cuenta" description="Datos para entrar en Psique.">
             <dl className="grid gap-1 text-body-sm">
               <dt className="text-[11px] font-bold tracking-[0.12em] text-ink-faint uppercase">Usuario para entrar</dt>
@@ -350,6 +416,16 @@ export function SettingsPage() {
             <p className="mt-3 text-body-sm text-ink-dim">
               El usuario no cambia al cambiar el handle. Pronto podrás cambiar la contraseña desde aquí.
             </p>
+            {restrictedUntil ? (
+              <p className="mt-3 text-body-sm text-ink">
+                <span className="font-semibold">Restricción temporal:</span> hasta el {formatRestrictedUntil(restrictedUntil)}{' '}
+                no puedes empezar ni continuar historias por incumplir las normas.
+              </p>
+            ) : null}
+          </SettingsSection>
+
+          <SettingsSection id="datos" title="Tus datos" description="Llévate una copia de todo lo que guardamos o borra la cuenta.">
+            <AccountDataSettings announce={announce} />
           </SettingsSection>
         </div>
       </div>

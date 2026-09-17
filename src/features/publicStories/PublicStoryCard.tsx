@@ -1,6 +1,7 @@
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { StoryCard } from '@/api/explore'
+import { AdultBadge } from '@/features/policy/AdultBadge'
 import { routes } from '@/router/paths'
 import { Avatar } from '@/shared/ui/Avatar'
 import { Badge } from '@/shared/ui/badge'
@@ -44,6 +45,7 @@ export function PublicStoryCard({
         ) : (
           <Badge variant="outline">Definida</Badge>
         )}
+        {card.adult ? <AdultBadge /> : null}
         {card.isMine && showAuthor ? <Badge variant="outline">Tuya</Badge> : null}
       </div>
 

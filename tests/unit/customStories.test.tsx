@@ -139,6 +139,7 @@ describe('crear historia concepto', () => {
           tone: null,
           isPublic: false,
           freeFirstRead: true,
+          adult: false,
         })
         await gate
         // Sin respuesta: sigue al handler normal del mock.

@@ -1,17 +1,26 @@
+import { lazy, Suspense } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Archive, ArrowLeft } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { activeRestriction } from '@/api/policy'
 import { fetchStory } from '@/api/stories'
 import { formatBookDate } from '@/features/book/format'
+import { StoryClosedNotice } from '@/features/policy/PolicyNotice'
 import { StoryStatus } from '@/features/story/StoryStatus'
 import { StoryTranscript } from '@/features/story/StoryTranscript'
 import { routes } from '@/router/paths'
 import { Card } from '@/shared/ui/card'
+import { useAuthStore } from '@/stores/authStore'
+
+const DevReopenButton = lazy(() => import('@/features/dev/DevTools').then((m) => ({ default: m.DevReopenButton })))
 
 /** Partida de solo lectura: mensajes y estado final, sin compositor ni sugerencias. */
 export function StoryArchivePage() {
   const { storyId = '' } = useParams()
   const story = useQuery({ queryKey: ['story', storyId], queryFn: () => fetchStory(storyId) })
+  const restrictedUntil = activeRestriction(useAuthStore((s) => s.user?.restrictedUntil))
+  const isDev = useAuthStore((s) => Boolean(s.user?.isDev))
+  const navigate = useNavigate()
 
   if (story.isLoading) return <p className="text-ink-dim">Abriendo el archivo…</p>
   if (story.isError || !story.data) {
@@ -29,6 +38,8 @@ export function StoryArchivePage() {
 
   const data = story.data
   const archived = data.status === 'archivada'
+  const closed = data.status === 'cerrada'
+  const closedOn = formatBookDate(data.closedAt)
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -43,16 +54,25 @@ export function StoryArchivePage() {
         <h1 className="font-serif text-display break-words text-ink">{data.characterName}</h1>
         <p className="flex flex-wrap items-center gap-x-2 text-body-sm text-ink-dim">
           <Archive size={16} aria-hidden className="text-gold" />
-          {archived
-            ? `Lectura archivada${data.archivedAt ? ` el ${formatBookDate(data.archivedAt)}` : ''}. Solo lectura.`
-            : 'Esta partida sigue en curso.'}
-          {archived ? null : (
+          {closed
+            ? `Cerrada por incumplir las normas${closedOn ? ` el ${closedOn}` : ''}. Solo lectura.`
+            : archived
+              ? `Lectura archivada${data.archivedAt ? ` el ${formatBookDate(data.archivedAt)}` : ''}. Solo lectura.`
+              : 'Esta partida sigue en curso.'}
+          {archived || closed ? null : (
             <Link to={routes.story(data.id)} className="font-semibold text-accent-text underline">
               Continuar
             </Link>
           )}
         </p>
       </header>
+
+      {closed ? <StoryClosedNotice restrictedUntil={restrictedUntil} /> : null}
+      {closed && isDev ? (
+        <Suspense fallback={null}>
+          <DevReopenButton storyId={data.id} onReopened={() => navigate(routes.story(data.id))} />
+        </Suspense>
+      ) : null}
 
       <Card className="p-4 sm:p-5">
         <h2 className="sr-only">Estado final</h2>

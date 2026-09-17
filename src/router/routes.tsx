@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { RequireAuth } from '@/router/RequireAuth'
 import { routes } from '@/router/paths'
@@ -14,6 +15,9 @@ import { ExplorePage } from '@/pages/Explore'
 import { ProfilePage } from '@/pages/Profile'
 import { SettingsPage } from '@/pages/Settings'
 import { ScratchGamePage } from '@/pages/ScratchGame'
+
+// Solo para cuentas dev: fuera del bundle principal.
+const DevPage = lazy(() => import('@/pages/Dev'))
 
 export function AppRoutes() {
   return (
@@ -32,6 +36,14 @@ export function AppRoutes() {
           <Route path="/u/:handle" element={<ProfilePage />} />
           <Route path={routes.configuracion} element={<SettingsPage />} />
           <Route path={routes.rascaYGana} element={<ScratchGamePage />} />
+          <Route
+            path={routes.dev}
+            element={
+              <Suspense fallback={<p className="text-ink-dim">Cargando…</p>}>
+                <DevPage />
+              </Suspense>
+            }
+          />
         </Route>
       </Route>
 

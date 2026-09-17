@@ -19,6 +19,9 @@ export function StoryTranscript({ messages, characterName, className, children }
       {messages.map((m) => (
         <ChatBubble key={m.id} role={m.role} characterName={characterName} streaming={m.streaming}>
           {m.role === 'assistant' ? <MarkdownStream content={m.content} /> : m.content}
+          {m.ephemeral ? (
+            <span className="mt-1.5 block text-[12px] text-ink-faint">Este momento no queda guardado en la historia.</span>
+          ) : null}
         </ChatBubble>
       ))}
       {children}

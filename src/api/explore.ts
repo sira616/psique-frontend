@@ -22,6 +22,7 @@ export type StoryCard = {
   definition: CustomStoryDefinition | null
   author: StoryAuthor
   isMine: boolean
+  adult: boolean
   publishedAt: string | null
 }
 

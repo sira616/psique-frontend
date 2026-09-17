@@ -16,8 +16,11 @@ import type { Character, PhaseId, Story, StorySummary, StoryStreamEvent } from '
 import {
   CONTENT_MESSAGES,
   DEMO_USER,
+  DEV_USER,
   OTHER_USERS,
   PHASES,
+  POLICY_KEYWORDS,
+  POLICY_MESSAGES,
   PSIQUE_FREE_FIRST_READ,
   SEED_MEDIA,
   SEED_READING,
@@ -39,7 +42,8 @@ import { MONEDA } from '@/shared/economy/moneda'
 type MockUser = typeof DEMO_USER
 type MockStory = Story & { userId: string; updatedAt: string }
 
-const users = new Map<string, MockUser>([DEMO_USER, ...OTHER_USERS].map((u) => [u.username, u]))
+const users = new Map<string, MockUser>([DEMO_USER, DEV_USER, ...OTHER_USERS].map((u) => [u.username, u]))
+const DEV_USER_IDS = new Set([DEV_USER.id])
 const sessions = new Map<string, { userId: string; refreshToken: string }>()
 // Imita la cookie httpOnly del backend. En Node (vitest) fetch no guarda cookies, así que
 // si la petición no trae ninguna se usa la última emitida, como haría el navegador.
@@ -49,6 +53,60 @@ const COOKIE_ATTRS = 'Path=/api/auth; HttpOnly; SameSite=Strict'
 const stories = new Map<string, MockStory>()
 
 let refreshFailOnce = false
+
+// Política de contenido por cuenta. Todas arrancan sin confirmar y sin restricción.
+type AccountFlags = { adultConfirmed: boolean; restrictedUntil: string | null }
+const accountFlags = new Map<string, AccountFlags>()
+
+function flagsOf(userId: string): AccountFlags {
+  let flags = accountFlags.get(userId)
+  if (!flags) {
+    flags = { adultConfirmed: false, restrictedUntil: null }
+    accountFlags.set(userId, flags)
+  }
+  return flags
+}
+
+function restrictionOf(userId: string): string | null {
+  const until = flagsOf(userId).restrictedUntil
+  return until && Date.parse(`${until}Z`) > Date.now() ? until : null
+}
+
+function restrictFor(userId: string, days: number) {
+  const until = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 19)
+  flagsOf(userId).restrictedUntil = until
+  return until
+}
+
+function authUserOut(user: MockUser) {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: profileOf(user).displayName,
+    handle: profileOf(user).handle,
+    isDev: DEV_USER_IDS.has(user.id),
+    adultConfirmed: flagsOf(user.id).adultConfirmed,
+    restrictedUntil: restrictionOf(user.id),
+  }
+}
+
+function adultRequired() {
+  return HttpResponse.json({ detail: POLICY_MESSAGES.adultRequired, code: 'adult_required' }, { status: 403 })
+}
+
+function accountRestricted(restrictedUntil: string) {
+  return HttpResponse.json(
+    { detail: POLICY_MESSAGES.restricted, code: 'account_restricted', restrictedUntil },
+    { status: 403 },
+  )
+}
+
+/** Mismo orden para crear, releer, chatear y desbloquear: primero la edad, luego la restricción. */
+function policyBlock(userId: string, adultBook: boolean) {
+  if (adultBook && !flagsOf(userId).adultConfirmed) return adultRequired()
+  const until = restrictionOf(userId)
+  return until ? accountRestricted(until) : null
+}
 
 // Solo con `npm run dev:mock`: una sesión sembrada para revisar la interfaz sin pasar por el
 // formulario de login. Se activa poniendo la cookie `psique_refresh=refresh-dev-demo`.
@@ -124,6 +182,7 @@ function toCard(story: CustomStory, ownerId: string, viewerId: string): StoryCar
     definition: story.mode === 'definida' ? story.definition : null,
     author: authorOf(ownerId),
     isMine: ownerId === viewerId,
+    adult: story.adult,
     publishedAt: story.publishedAt,
   }
 }
@@ -196,6 +255,7 @@ function customToCharacter(story: CustomStory): Character {
     tagline: def ? story.hook : null,
     traits: def ? splitTraits(def.personality) : null,
     scenario: def?.setting ?? null,
+    adult: story.adult,
   }
 }
 
@@ -255,16 +315,7 @@ function issue(user: MockUser) {
   sessions.set(accessToken, { userId: user.id, refreshToken })
   lastRefreshToken = refreshToken
   return {
-    body: {
-      access_token: accessToken,
-      user: {
-        id: user.id,
-        username: user.username,
-        displayName: profileOf(user).displayName,
-        handle: profileOf(user).handle,
-        isDev: false,
-      },
-    },
+    body: { access_token: accessToken, user: authUserOut(user) },
     headers: { 'Set-Cookie': `${REFRESH_COOKIE}=${refreshToken}; ${COOKIE_ATTRS}` },
   }
 }
@@ -311,6 +362,46 @@ function stateFor(phaseIndex: number, affinity: number, turnCount: number, locke
     next_phase: locked ? (PHASES[phaseIndex + 1]?.id ?? null) : null,
     chapter_cost: CHAPTER_COST,
   }
+}
+
+// Cupo diario de turnos (como CHAT_TURNS_PER_DAY). El día es el local de quien usa el mock.
+const MOCK_TURNS_PER_DAY = 60
+const turnUsage = new Map<string, { day: string; turns: number }>()
+
+function localDay(date = new Date()) {
+  return date.toLocaleDateString('sv-SE')
+}
+
+function nextMidnightIso() {
+  const next = new Date()
+  next.setHours(24, 0, 0, 0)
+  return next.toISOString()
+}
+
+function turnsUsedToday(userId: string) {
+  const entry = turnUsage.get(userId)
+  return entry && entry.day === localDay() ? entry.turns : 0
+}
+
+function usageOut(userId: string) {
+  const unlimited = DEV_USER_IDS.has(userId)
+  const used = turnsUsedToday(userId)
+  return {
+    turnsUsed: used,
+    turnsLimit: unlimited ? null : MOCK_TURNS_PER_DAY,
+    turnsRemaining: unlimited ? null : Math.max(0, MOCK_TURNS_PER_DAY - used),
+    unlimited,
+    resetsAt: nextMidnightIso(),
+  }
+}
+
+function devOnly(request: Request): { user: MockUser; error: null } | { user: null; error: Response } {
+  const user = bearerUser(request)
+  if (!user) return { user: null, error: unauthorized() }
+  if (!DEV_USER_IDS.has(user.id)) {
+    return { user: null, error: HttpResponse.json({ detail: 'Solo para cuentas de desarrollo.' }, { status: 403 }) }
+  }
+  return { user, error: null }
 }
 
 // Economía simulada. Las cifras son de juguete: las reales las decide el backend.
@@ -362,6 +453,8 @@ const READ_COST = 3
 const READ_SHORT = `Te faltan ${MONEDA.plural} para empezar este libro. Puedes ganar más en Rasca y gana.`
 /** Lectura archivada sembrada de la cuenta demo: /historia/story-archivada/archivo. */
 export const ARCHIVED_DEMO_STORY_ID = 'story-archivada'
+/** Partida cerrada por incumplir las normas, en «Café a medianoche» de la demo: /historia/story-cerrada. */
+export const CLOSED_DEMO_STORY_ID = 'story-cerrada'
 
 let demoSeeded = false
 
@@ -373,7 +466,14 @@ function storyStore() {
   if (!demoSeeded) {
     demoSeeded = true
     const mateo = mockCharacters.find((c) => c.id === 'mateo')!
-    const base = { userId: DEMO_USER.id, characterId: mateo.id, characterName: mateo.name ?? mateo.title, facts: [] }
+    const base = {
+      userId: DEMO_USER.id,
+      characterId: mateo.id,
+      characterName: mateo.name ?? mateo.title,
+      facts: [],
+      closedAt: null,
+      closedReason: null,
+    }
     stories.set(ARCHIVED_DEMO_STORY_ID, {
       ...base,
       id: ARCHIVED_DEMO_STORY_ID,
@@ -397,6 +497,26 @@ function storyStore() {
       archivedAt: null,
       createdAt: '2026-09-15T20:00:00',
       updatedAt: '2026-09-16T20:00:00',
+    })
+    // Va en un libro propio de la demo para no tocar el historial de Mateo ni dejar a Lucía empezada.
+    const cafe = seedCustomStories().find((c) => c.title === 'Café a medianoche')!
+    stories.set(CLOSED_DEMO_STORY_ID, {
+      ...base,
+      id: CLOSED_DEMO_STORY_ID,
+      characterId: cafe.characterId,
+      characterName: cafe.definition?.name ?? cafe.title,
+      state: { ...stateFor(1, 42, 7), quickChoices: [] },
+      messages: [
+        { id: 1, role: 'assistant', content: `*${cafe.definition?.setting ?? cafe.hook}*` },
+        { id: 2, role: 'user', content: 'Un cortado, por favor. Y lo que tú recomiendes para una noche larga.' },
+        { id: 3, role: 'assistant', content: mockReplies[2]! },
+      ],
+      status: 'cerrada',
+      archivedAt: null,
+      closedAt: '2026-09-14T23:40:00',
+      closedReason: POLICY_MESSAGES.closedReason,
+      createdAt: '2026-09-14T22:00:00',
+      updatedAt: '2026-09-14T23:40:00',
     })
   }
   return stories
@@ -441,6 +561,10 @@ function bookIdParam(value: unknown) {
   } catch {
     return raw
   }
+}
+
+function isAdultBook(book: MockBook | null) {
+  return Boolean(book?.custom?.adult ?? book?.character?.adult)
 }
 
 function freeFirstReadOf(book: MockBook) {
@@ -513,6 +637,7 @@ function bookOut(book: MockBook, viewerId: string): BookOut {
     isPublic: custom?.isPublic ?? true,
     chapterCount: PHASES.length,
     freeFirstRead: free,
+    adult: isAdultBook(book),
     readCost: READ_COST,
     publishedAt: custom?.publishedAt ?? null,
     createdAt: custom?.createdAt ?? null,
@@ -533,6 +658,7 @@ function bookOut(book: MockBook, viewerId: string): BookOut {
       primaryAction: active
         ? { kind: 'continuar', cost: 0 }
         : { kind: 'leer', cost: free && own.length === 0 ? 0 : READ_COST },
+      adultRequired: isAdultBook(book) && !flagsOf(viewerId).adultConfirmed,
       canReread: own.length > 0,
       rereadCost: READ_COST,
       canReview: own.length > 0 && !isMine,
@@ -564,6 +690,8 @@ function newStory(userId: string, book: MockBook): MockStory {
     facts: [],
     status: 'activa',
     archivedAt: null,
+    closedAt: null,
+    closedReason: null,
     createdAt: nowIso(),
     updatedAt: nowIso(),
   }
@@ -586,7 +714,25 @@ function bookCard(book: MockBook): BookCard {
     tone: custom?.tone ?? null,
     author: book.ownerId ? authorOf(book.ownerId) : null,
     readers: readersOf(book.id),
+    adult: isAdultBook(book),
   }
+}
+
+function closeStory(story: MockStory) {
+  Object.assign(story, {
+    status: 'cerrada',
+    closedAt: nowIso(),
+    closedReason: POLICY_MESSAGES.closedReason,
+    updatedAt: nowIso(),
+    state: { ...story.state, quickChoices: [] },
+  })
+}
+
+function storyClosed(story: MockStory, restrictedUntil: string | null, detail = 'Esta partida está cerrada por incumplir las normas.') {
+  return HttpResponse.json(
+    { detail, code: 'story_closed', closedAt: story.closedAt, closedReason: story.closedReason, restrictedUntil },
+    { status: 403 },
+  )
 }
 
 export const handlers = [
@@ -647,14 +793,153 @@ export const handlers = [
   http.get('/api/me', ({ request }) => {
     const user = bearerUser(request)
     if (!user) return unauthorized()
-    const profile = profileOf(user)
-    return HttpResponse.json({
-      id: user.id,
-      username: user.username,
-      displayName: profile.displayName,
-      handle: profile.handle,
-      isDev: false,
+    return HttpResponse.json(authUserOut(user))
+  }),
+
+  http.get('/api/me/usage', ({ request }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    return HttpResponse.json(usageOut(user.id))
+  }),
+
+  http.get('/api/me/export', ({ request }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    const own = [...storyStore().values()].filter((s) => s.userId === user.id)
+    return HttpResponse.json(
+      {
+        format: 'psique-export-1',
+        exportedAt: nowIso(),
+        account: { ...authUserOut(user), ...profileOf(user) },
+        customStories: customStoriesOf(user.id),
+        stories: own.map(storyOut),
+        reviews: [],
+        oboloMovements: walletOf(user.id).movements,
+        scratchCards: [],
+        conductIncidents: [],
+        chatUsage: [{ day: localDay(), turns: turnsUsedToday(user.id) }],
+      },
+      { headers: { 'Content-Disposition': `attachment; filename="psique-datos-${profileOf(user).handle}.json"` } },
+    )
+  }),
+
+  http.delete('/api/me', async ({ request }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    const body = (await request.json().catch(() => null)) as { password?: string; confirmation?: string } | null
+    if (body?.confirmation !== 'BORRAR' || !body.password) {
+      return fieldError(422, 'confirmation', 'literal_error', "Input should be 'BORRAR'")
+    }
+    if (body.password !== user.password) {
+      return HttpResponse.json({ detail: 'La contraseña no es correcta.', code: 'invalid_password' }, { status: 403 })
+    }
+    users.delete(user.username)
+    for (const [access, s] of sessions) if (s.userId === user.id) sessions.delete(access)
+    for (const [id, s] of storyStore()) if (s.userId === user.id) stories.delete(id)
+    lastRefreshToken = null
+    return new HttpResponse(null, {
+      status: 204,
+      headers: { 'Set-Cookie': `${REFRESH_COOKIE}=; Max-Age=0; ${COOKIE_ATTRS}` },
     })
+  }),
+
+  http.post('/api/dev/stories/:id/phase', async ({ request, params }) => {
+    const { user, error } = devOnly(request)
+    if (!user) return error
+    const story = ownStory(user.id, String(params.id))
+    if (!story) return HttpResponse.json({ detail: 'Historia no encontrada.' }, { status: 404 })
+    const body = (await request.json()) as { phase?: string }
+    const index = PHASES.findIndex((p) => p.id === body.phase)
+    if (index < 0) return fieldError(422, 'phase', 'literal_error', 'Fase no válida')
+    const from = story.state.phase
+    story.state = stateFor(index, story.state.affinity, story.state.turnCount, false, true)
+    return HttpResponse.json({ ...story.state, transition: { from, to: story.state.phase, reason: 'Forzada desde dev.' }, signals: [] })
+  }),
+
+  http.post('/api/dev/stories/:id/affinity', async ({ request, params }) => {
+    const { user, error } = devOnly(request)
+    if (!user) return error
+    const story = ownStory(user.id, String(params.id))
+    if (!story) return HttpResponse.json({ detail: 'Historia no encontrada.' }, { status: 404 })
+    const body = (await request.json()) as { delta?: number; value?: number }
+    const next = body.value ?? story.state.affinity + (body.delta ?? 0)
+    story.state = { ...story.state, affinity: Math.max(0, Math.min(100, next)) }
+    return HttpResponse.json({ ...story.state, transition: null, signals: [] })
+  }),
+
+  http.post('/api/dev/stories/:id/unlock-chapter', ({ request, params }) => {
+    const { user, error } = devOnly(request)
+    if (!user) return error
+    const story = ownStory(user.id, String(params.id))
+    if (!story) return HttpResponse.json({ detail: 'Historia no encontrada.' }, { status: 404 })
+    if (!story.state.chapter_locked) {
+      return HttpResponse.json({ detail: 'No hay ningún capítulo por desbloquear.' }, { status: 409 })
+    }
+    const from = story.state.phase
+    story.state = stateFor(story.state.phaseIndex + 1, story.state.affinity, story.state.turnCount, false, true)
+    return HttpResponse.json({ ...story.state, transition: { from, to: story.state.phase, reason: 'Desbloqueado desde dev.' }, signals: [] })
+  }),
+
+  http.get('/api/dev/stories/:id/context', ({ request, params }) => {
+    const { user, error } = devOnly(request)
+    if (!user) return error
+    const story = ownStory(user.id, String(params.id))
+    if (!story) return HttpResponse.json({ detail: 'Historia no encontrada.' }, { status: 404 })
+    return HttpResponse.json({
+      storyId: story.id,
+      status: story.status,
+      phase: story.state.phase,
+      pendingPhase: story.state.next_phase ?? null,
+      affinity: story.state.affinity,
+      turnCount: story.state.turnCount,
+      systemPrompt: `Eres ${story.characterName}. (Prompt simulado del mock.)`,
+      window: story.messages.slice(-20).map((m) => ({ role: m.role, content: m.content })),
+      summary: '',
+      summaryUptoMessageId: null,
+      sceneTitle: story.state.scene ?? null,
+      suggestions: { origin: 'mock', items: story.state.quickChoices },
+      suggestionsTurn: story.state.turnCount,
+    })
+  }),
+
+  http.post('/api/dev/stories/:id/reopen', ({ request, params }) => {
+    const { user, error } = devOnly(request)
+    if (!user) return error
+    const story = ownStory(user.id, String(params.id))
+    if (!story) return HttpResponse.json({ detail: 'Historia no encontrada.' }, { status: 404 })
+    if (story.status !== 'cerrada') {
+      return HttpResponse.json({ detail: 'Solo se reabre una partida cerrada y sin otra activa del mismo libro.' }, { status: 409 })
+    }
+    Object.assign(story, {
+      status: 'activa',
+      closedAt: null,
+      closedReason: null,
+      state: stateFor(story.state.phaseIndex, story.state.affinity, story.state.turnCount),
+    })
+    return HttpResponse.json(storyOut(story))
+  }),
+
+  http.post('/api/dev/me/lift-restriction', ({ request }) => {
+    const { user, error } = devOnly(request)
+    if (!user) return error
+    flagsOf(user.id).restrictedUntil = null
+    return HttpResponse.json(authUserOut(user))
+  }),
+
+  http.post('/api/me/adult-confirmation', async ({ request }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    const body = (await request.json().catch(() => null)) as { confirm?: unknown } | null
+    if (body?.confirm !== true) return fieldError(422, 'confirm', 'literal_error', 'Input should be True')
+    flagsOf(user.id).adultConfirmed = true
+    return HttpResponse.json(authUserOut(user))
+  }),
+
+  http.delete('/api/me/adult-confirmation', ({ request }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    flagsOf(user.id).adultConfirmed = false
+    return HttpResponse.json(authUserOut(user))
   }),
 
   http.get('/api/characters', ({ request }) => {
@@ -708,7 +993,12 @@ export const handlers = [
     const id = hex32()
     const input = body as CreateCustomStory
     const isPublic = body.isPublic === true
-    const visibility = { isPublic, freeFirstRead: body.freeFirstRead !== false, publishedAt: isPublic ? nowIso() : null }
+    const visibility = {
+      isPublic,
+      freeFirstRead: body.freeFirstRead !== false,
+      adult: body.adult === true,
+      publishedAt: isPublic ? nowIso() : null,
+    }
     let story: CustomStory
     if (input.mode === 'definida') {
       const setting = input.setting.trim()
@@ -758,10 +1048,11 @@ export const handlers = [
     if (!user) return unauthorized()
     const body = (await request.json()) as Record<string, unknown>
     const keys = Object.keys(body)
-    const extra = keys.find((k) => k !== 'isPublic' && k !== 'freeFirstRead')
+    const extra = keys.find((k) => k !== 'isPublic' && k !== 'freeFirstRead' && k !== 'adult')
     if (extra) return fieldError(422, extra, 'extra_forbidden', 'Extra inputs are not permitted')
-    if (!keys.length) return fieldError(422, 'isPublic', 'missing', 'Indica isPublic o freeFirstRead.')
-    const notBool = keys.find((k) => typeof body[k] !== 'boolean')
+    if (!keys.length) return fieldError(422, 'isPublic', 'missing', 'Indica isPublic, freeFirstRead o adult.')
+    // `adult` admite null (= sin cambios), como en el backend.
+    const notBool = keys.find((k) => typeof body[k] !== 'boolean' && !(k === 'adult' && body[k] === null))
     if (notBool) return fieldError(422, notBool, 'bool_type', 'Input should be a valid boolean')
     const story = customStoriesOf(user.id).find((s) => s.id === String(params.id))
     if (!story) return HttpResponse.json({ detail: CONTENT_MESSAGES.notFound }, { status: 404 })
@@ -770,6 +1061,7 @@ export const handlers = [
       story.isPublic = body.isPublic
     }
     if (typeof body.freeFirstRead === 'boolean') story.freeFirstRead = body.freeFirstRead
+    if (typeof body.adult === 'boolean') story.adult = body.adult
     return HttpResponse.json(story)
   }),
 
@@ -783,7 +1075,8 @@ export const handlers = [
     if (!Number.isInteger(limit) || limit < 1 || limit > 50) return fieldError(422, 'limit', 'less_than_equal', 'Límite no válido')
     if (!Number.isInteger(offset) || offset < 0 || offset > 10000) return fieldError(422, 'offset', 'less_than_equal', 'Offset no válido')
     if (mode !== null && mode !== 'definida' && mode !== 'concepto') return fieldError(422, 'mode', 'literal_error', 'Modo no válido')
-    const all = allPublicStories().filter(({ story }) => !mode || story.mode === mode)
+    const adultOk = flagsOf(user.id).adultConfirmed
+    const all = allPublicStories().filter(({ story }) => (!mode || story.mode === mode) && (adultOk || !story.adult))
     const items = all.slice(offset, offset + limit).map(({ story, ownerId }) => toCard(story, ownerId, user.id))
     return HttpResponse.json({
       items,
@@ -859,8 +1152,10 @@ export const handlers = [
     if (!owner) return HttpResponse.json({ detail: 'Perfil no encontrado.' }, { status: 404 })
     const profile = profileOf(owner)
     const isOwner = owner.id === viewer.id
+    // Como Explorar: sin confirmar no salen los +18 (el autor siempre ve los suyos).
+    const adultOk = isOwner || flagsOf(viewer.id).adultConfirmed
     const published = customStoriesOf(owner.id)
-      .filter((s) => s.isPublic)
+      .filter((s) => s.isPublic && (adultOk || !s.adult))
       .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
       .map((s) => toCard(s, owner.id, viewer.id))
     // Para otros se omiten las partidas con historias privadas de terceros.
@@ -959,13 +1254,15 @@ export const handlers = [
     const own = [...storyStore().values()].filter((s) => s.userId === user.id && s.status === 'activa')
     return HttpResponse.json(
       own.map(
-        ({ id, characterId, characterName, state, status, archivedAt, updatedAt }): StorySummary => ({
+        ({ id, characterId, characterName, state, status, archivedAt, closedAt, closedReason, updatedAt }): StorySummary => ({
           id,
           characterId,
           characterName,
           state,
           status,
           archivedAt,
+          closedAt,
+          closedReason,
           updatedAt,
         }),
       ),
@@ -978,6 +1275,8 @@ export const handlers = [
     const body = (await request.json()) as { characterId?: string }
     const book = findBook(String(body.characterId), user.id)
     if (!book) return HttpResponse.json({ detail: 'Ese personaje no existe.' }, { status: 404 })
+    const blocked = policyBlock(user.id, isAdultBook(book))
+    if (blocked) return blocked
     const own = userStoriesFor(user.id, book.id)
     const active = own.find((s) => s.status === 'activa')
     // Ya hay partida activa: se devuelve tal cual, sin crear ni cobrar.
@@ -1011,6 +1310,10 @@ export const handlers = [
     if (story.status === 'archivada') {
       return HttpResponse.json({ detail: 'Esta lectura está archivada.', code: 'story_archived' }, { status: 409 })
     }
+    if (story.status === 'cerrada') return storyClosed(story, null)
+    const adultBook = isAdultBook(findBook(story.characterId, user.id))
+    const blocked = policyBlock(user.id, adultBook)
+    if (blocked) return blocked
     // Como el backend: con capítulo pendiente el turno se rechaza antes de abrir el stream.
     if (story.state.chapter_locked) {
       return HttpResponse.json(
@@ -1028,6 +1331,33 @@ export const handlers = [
       return HttpResponse.json({ detail: 'Esa opción ya no está disponible.' }, { status: 422 })
     }
     const userText = choice?.message ?? body.message ?? ''
+    // Disparadores del mock (ver POLICY_KEYWORDS). El mensaje que los provoca nunca se guarda.
+    const lower = userText.toLowerCase()
+    if (lower.includes(POLICY_KEYWORDS.closeAndRestrict) || lower.includes(POLICY_KEYWORDS.close)) {
+      closeStory(story)
+      const until = lower.includes(POLICY_KEYWORDS.closeAndRestrict) ? restrictFor(user.id, 7) : null
+      return storyClosed(story, until, POLICY_MESSAGES.closed)
+    }
+    if (lower.includes(POLICY_KEYWORDS.restrict)) return accountRestricted(restrictFor(user.id, 3))
+    if (lower.includes(POLICY_KEYWORDS.redirect) || (adultBook && /expl[ií]cit/i.test(userText))) {
+      return HttpResponse.json(
+        { detail: POLICY_MESSAGES.redirected, code: 'content_redirected', reply: POLICY_MESSAGES.redirectReply },
+        { status: 422 },
+      )
+    }
+    // Lo último antes del stream, como en el backend: solo gasta cupo lo que llega al modelo.
+    if (!DEV_USER_IDS.has(user.id) && turnsUsedToday(user.id) >= MOCK_TURNS_PER_DAY) {
+      return HttpResponse.json(
+        {
+          detail: 'Has llegado al límite de turnos de hoy. La historia te espera: podrás seguir cuando se renueve el cupo.',
+          code: 'daily_turn_limit',
+          resetsAt: nextMidnightIso(),
+          turnsLimit: MOCK_TURNS_PER_DAY,
+        },
+        { status: 429 },
+      )
+    }
+    turnUsage.set(user.id, { day: localDay(), turns: turnsUsedToday(user.id) + 1 })
     const turn = story.state.turnCount + 1
     const reply = mockReplies[turn % mockReplies.length]!
     // Cada cuatro turnos tocaría fase nueva, pero en el mock toda fase nueva se paga: queda
@@ -1066,6 +1396,9 @@ export const handlers = [
     if (story.status === 'archivada') {
       return HttpResponse.json({ detail: 'Esta lectura está archivada.', code: 'story_archived' }, { status: 409 })
     }
+    if (story.status === 'cerrada') return storyClosed(story, null)
+    const blocked = policyBlock(user.id, isAdultBook(findBook(story.characterId, user.id)))
+    if (blocked) return blocked
     if (!story.state.chapter_locked) {
       return HttpResponse.json({ detail: 'No hay ningún capítulo bloqueado.' }, { status: 409 })
     }
@@ -1099,6 +1432,8 @@ export const handlers = [
     if (!user) return unauthorized()
     const book = findBook(bookIdParam(params.bookId), user.id)
     if (!book) return bookNotFound()
+    const blocked = policyBlock(user.id, isAdultBook(book))
+    if (blocked) return blocked
     const own = userStoriesFor(user.id, book.id)
     if (!own.length) {
       return HttpResponse.json({ detail: 'Todavía no has empezado este libro.', code: 'not_started' }, { status: 409 })
@@ -1119,13 +1454,16 @@ export const handlers = [
     if (!user) return unauthorized()
     const book = findBook(bookIdParam(params.bookId), user.id)
     if (!book) return bookNotFound()
+    const endOf = (s: MockStory) => s.archivedAt ?? s.closedAt ?? ''
     const items: HistoryItem[] = userStoriesFor(user.id, book.id)
-      .filter((s) => s.status === 'archivada')
-      .sort((a, b) => (b.archivedAt ?? '').localeCompare(a.archivedAt ?? ''))
+      .filter((s) => s.status !== 'activa')
+      .sort((a, b) => endOf(b).localeCompare(endOf(a)))
       .map((s) => ({
         storyId: s.id,
+        status: s.status,
         startedAt: s.createdAt ?? null,
         archivedAt: s.archivedAt,
+        closedAt: s.closedAt,
         phase: s.state.phase,
         phaseLabel: s.state.phaseLabel,
         phaseIndex: s.state.phaseIndex,
@@ -1324,13 +1662,21 @@ export const handlers = [
 ]
 
 /** Para tests: vuelve a las historias propias de partida. */
+/** Para tests: fija los turnos gastados hoy por una cuenta. */
+export function __setTurnsUsed(userId: string, turns: number) {
+  turnUsage.set(userId, { day: localDay(), turns })
+}
+
 export function __resetCustomStories() {
+  for (const u of [DEMO_USER, DEV_USER, ...OTHER_USERS]) users.set(u.username, u)
+  turnUsage.clear()
   customStories.clear()
   profiles = null
   uploadedMedia.clear()
   wallets.clear()
   scratchCards.clear()
   reviews = null
+  accountFlags.clear()
   for (const [id, story] of stories) if (story.userId === DEMO_USER.id) stories.delete(id)
   demoSeeded = false
 }

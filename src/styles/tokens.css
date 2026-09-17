@@ -28,6 +28,7 @@
   --ps-shadow-md: 0 12px 30px -14px rgba(0, 0, 0, 0.7), 0 2px 8px -4px rgba(0, 0, 0, 0.5);
   --ps-shadow-glow: 0 12px 34px -14px rgba(184, 57, 92, 0.55);
   --ps-sheen: rgba(255, 235, 240, 0.1);
+  --ps-scrim: rgba(8, 5, 7, 0.72);
   --ps-inset-shine: rgba(255, 255, 255, 0.18);
   --ps-control-hover: rgba(255, 235, 240, 0.06);
   --ps-focus-ring: rgba(238, 154, 176, 0.22);
@@ -63,6 +64,7 @@
   --ps-shadow-md: 0 14px 32px -16px rgba(42, 26, 34, 0.16), 0 4px 12px -6px rgba(42, 26, 34, 0.08);
   --ps-shadow-glow: 0 12px 28px -14px rgba(163, 50, 79, 0.35);
   --ps-sheen: rgba(42, 26, 34, 0.06);
+  --ps-scrim: rgba(42, 26, 34, 0.45);
   --ps-inset-shine: rgba(255, 255, 255, 0.35);
   --ps-control-hover: rgba(42, 26, 34, 0.05);
   --ps-focus-ring: rgba(163, 50, 79, 0.16);

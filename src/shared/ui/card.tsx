@@ -6,7 +6,8 @@ export function Card({
   style,
   children,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: React.ComponentProps<'div'>) {
+  // En React 19 `ref` llega como prop y el spread lo pasa al div.
   return (
     <div
       className={cn('relative overflow-hidden rounded-[20px] text-ink', className)}

@@ -11,7 +11,7 @@ type StoryFieldProps = {
   maxLength?: number
   multiline?: boolean
   rows?: number
-  type?: 'text' | 'number' | 'url'
+  type?: 'text' | 'number' | 'url' | 'password'
   /** false: deja escribir de más y marca el contador; útil cuando pegar texto largo no debe recortarse en silencio. */
   enforceMaxLength?: boolean
   autoComplete?: string

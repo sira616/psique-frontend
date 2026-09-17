@@ -53,6 +53,8 @@ export type Character = {
   tagline: string | null
   traits: string[] | null
   scenario: string | null
+  /** Solo para cuentas que han confirmado ser mayores de edad. */
+  adult: boolean
 }
 
 export type StoryMessage = {
@@ -62,8 +64,11 @@ export type StoryMessage = {
   createdAt?: string | null
 }
 
-/** Solo hay una partida `activa` por usuario y libro; al releer, la anterior pasa a `archivada`. */
-export type StoryStatus = 'activa' | 'archivada'
+/**
+ * Solo hay una partida `activa` por usuario y libro; al releer, la anterior pasa a `archivada`.
+ * `cerrada`: la cerró un mensaje que incumplía las normas; queda de solo lectura.
+ */
+export type StoryStatus = 'activa' | 'archivada' | 'cerrada'
 
 export type Story = {
   id: string
@@ -74,6 +79,8 @@ export type Story = {
   facts: { key: string; value: string }[]
   status: StoryStatus
   archivedAt: string | null
+  closedAt: string | null
+  closedReason: string | null
   createdAt?: string | null
 }
 
@@ -84,6 +91,8 @@ export type StorySummary = {
   state: StoryState
   status: StoryStatus
   archivedAt: string | null
+  closedAt: string | null
+  closedReason: string | null
   updatedAt?: string | null
 }
 

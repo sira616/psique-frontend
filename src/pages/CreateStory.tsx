@@ -67,6 +67,7 @@ export function CreateStoryPage() {
   const [generalError, setGeneralError] = useState<string | null>(null)
   const [isPublic, setIsPublic] = useState(false)
   const [freeFirstRead, setFreeFirstRead] = useState(true)
+  const [adult, setAdult] = useState(false)
 
   const create = useMutation({
     mutationFn: createCustomStory,
@@ -116,9 +117,17 @@ export function CreateStoryPage() {
         hook: d.hook.trim() || null,
         isPublic,
         freeFirstRead,
+        adult,
       }
     } else {
-      body = { mode, premise: concepto.premise.trim(), tone: concepto.tone.trim() || null, isPublic, freeFirstRead }
+      body = {
+        mode,
+        premise: concepto.premise.trim(),
+        tone: concepto.tone.trim() || null,
+        isPublic,
+        freeFirstRead,
+        adult,
+      }
     }
     create.mutate(body)
   }
@@ -320,6 +329,27 @@ export function CreateStoryPage() {
                 aria-describedby="gratis-help"
               />
             </div>
+
+            <label
+              className="mb-4 flex cursor-pointer items-start gap-3 rounded-[14px] border p-3 has-focus-visible:ring-2 has-focus-visible:ring-[color:var(--ps-accent-text)]"
+              style={{ borderColor: 'var(--ps-line-strong)' }}
+            >
+              <input
+                type="checkbox"
+                checked={adult}
+                onChange={(event) => setAdult(event.target.checked)}
+                disabled={pending}
+                aria-describedby="adulta-help"
+                className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-[color:var(--ps-primary)] disabled:cursor-not-allowed"
+              />
+              <span className="min-w-0">
+                <span className="block font-semibold text-ink">+18</span>
+                <span id="adulta-help" className="block text-body-sm text-ink-dim">
+                  Solo la verán cuentas que han confirmado ser mayores de edad. Las escenas íntimas siguen con fundido a
+                  negro.
+                </span>
+              </span>
+            </label>
 
             {generalError ? (
               <p role="alert" className="mb-3 text-[13px] text-error">

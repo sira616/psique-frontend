@@ -15,6 +15,7 @@ export const mockCharacters: Character[] = [
     traits: ['irónica pero nunca cruel', 'curiosa hasta la impertinencia amable', 'tarda en confiar y lo sabe'],
     scenario:
       'Es jueves por la tarde y llueve. Entras en el taller buscando a alguien que arregle un libro con valor sentimental.',
+    adult: false,
   },
   {
     id: 'mateo',
@@ -28,6 +29,7 @@ export const mockCharacters: Character[] = [
     traits: ['cálido y algo tímido', 'escucha más de lo que habla', 'cuando se pone nervioso, cocina'],
     scenario:
       'Es la última hora de un martes. El restaurante ha cerrado y vuelves a por una chaqueta olvidada.',
+    adult: false,
   },
 ]
 
@@ -45,6 +47,7 @@ export function seedCustomStories(): CustomStory[] {
       definition: null,
       isPublic: false,
       freeFirstRead: true,
+      adult: false,
       publishedAt: null,
       createdAt: '2026-09-16T18:49:17',
     },
@@ -67,6 +70,7 @@ export function seedCustomStories(): CustomStory[] {
       },
       isPublic: true,
       freeFirstRead: true,
+      adult: false,
       publishedAt: '2026-09-15T10:05:00',
       createdAt: '2026-09-15T10:00:00',
     },
@@ -97,6 +101,30 @@ export const SEED_REVIEWS: { userId: string; bookId: string; rating: number; tex
     createdAt: '2026-09-12T23:30:00',
   },
 ]
+
+/**
+ * Palabras clave del chat mock para provocar la política de contenido (no existen en el backend):
+ * `#cerrar`, `#cerrar-restringir`, `#restringir` y `#reconducir`. En un libro +18, cualquier
+ * mensaje "explícito" también se reconduce.
+ */
+export const POLICY_KEYWORDS = {
+  close: '#cerrar',
+  closeAndRestrict: '#cerrar-restringir',
+  restrict: '#restringir',
+  redirect: '#reconducir',
+} as const
+
+export const POLICY_MESSAGES = {
+  adultRequired: 'Este libro es solo para cuentas que han confirmado ser mayores de edad.',
+  restricted: 'Tu cuenta tiene restringido empezar o continuar historias durante un tiempo.',
+  closed:
+    'Hemos cerrado esta partida porque el último mensaje incumplía las normas de Psique. No se ha guardado.',
+  closedReason: 'Contenido que incumple las normas',
+  redirected:
+    'Esta historia es +18, pero las escenas íntimas se cierran con un fundido a negro. La escena sigue por otro camino.',
+  redirectReply:
+    '*Sostiene tu mirada un momento, sonríe y apaga la lámpara.* Lo que pase ahora se queda entre nosotros... *A la mañana siguiente, el café ya está hecho.*',
+}
 
 export const CONTENT_MESSAGES = {
   sexual:
@@ -201,6 +229,15 @@ export const DEMO_USER = {
   handle: 'demo',
 }
 
+/** Cuenta dev del mock: ve la entrada Dev y el panel de herramientas en las historias. */
+export const DEV_USER = {
+  id: 'user-dev',
+  username: 'dev',
+  password: 'DevPsique2026',
+  displayName: 'Dev',
+  handle: 'dev',
+}
+
 // Perfiles, Explorar e imágenes
 
 export type MockProfile = {
@@ -280,6 +317,7 @@ type SeedStory = {
   tone: string | null
   definition?: CustomStoryDefinition
   freeFirstRead?: boolean
+  adult?: boolean
 }
 
 const def = (name: string, age: number, personality: string, tone: string): CustomStoryDefinition => ({
@@ -312,10 +350,12 @@ const PUBLIC_SEEDS: Record<string, SeedStory[]> = {
   'user-marcos': [
     { mode: 'concepto', title: 'Invierno en Tromsø', hook: 'Unas auroras que no se dejan ver y alguien que lleva tres inviernos esperándolas.', tone: 'sereno' },
     { mode: 'definida', title: 'Relojería Ortega', hook: 'Un reloj que se para siempre a la misma hora en una relojería de Toledo.', tone: 'enigmático', definition: def('Teresa Ortega', 47, 'observadora, discreta, sabia', 'enigmático') },
+    // Libro +18: fuera de Explorar hasta confirmar la mayoría de edad.
+    { mode: 'definida', title: 'Después de medianoche', hook: 'Un hotel de Tánger, una tormenta de verano y una puerta que se queda entreabierta.', tone: 'sensual', definition: def('Samir Haddad', 39, 'magnético, sincero, reservado', 'sensual'), adult: true },
   ],
 }
 
-function seedStoryId(userId: string, index: number) {
+export function seedStoryId(userId: string, index: number) {
   return `${userId.replace(/\W/g, '')}${String(index).padStart(2, '0')}`.padEnd(32, '0')
 }
 
@@ -338,6 +378,7 @@ export function seedOtherStories(userId: string): CustomStory[] {
       definition: seed.definition ?? null,
       isPublic: true,
       freeFirstRead: seed.freeFirstRead ?? true,
+      adult: seed.adult ?? false,
       publishedAt: published,
       createdAt: published,
     }

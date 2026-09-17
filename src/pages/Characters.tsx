@@ -12,6 +12,7 @@ import {
   type CustomStory,
   type CustomStoryPatch,
 } from '@/api/customStories'
+import { AdultBadge } from '@/features/policy/AdultBadge'
 import { routes } from '@/router/paths'
 import { ApiError } from '@/shared/lib/apiClient'
 import type { Character } from '@/shared/lib/events'
@@ -48,6 +49,7 @@ function ProfileCard({ character }: { character: Character }) {
           <span className="shrink-0 text-body-sm text-ink-faint">{character.age} años</span>
         ) : null}
       </div>
+      {character.adult ? <AdultBadge className="w-fit" /> : null}
       {isOwn && character.name ? <p className="text-body-sm font-semibold text-ink">{character.name}</p> : null}
       {character.tagline ?? character.hook ? (
         <p className="text-body-sm text-ink-dim">{character.tagline ?? character.hook}</p>
@@ -71,10 +73,13 @@ function ProfileCard({ character }: { character: Character }) {
 function ConceptCard({ character }: { character: Character }) {
   return (
     <>
-      <Badge variant="outline" className="w-fit gap-1 text-accent-text">
-        <Sparkles size={12} aria-hidden />
-        Por descubrir
-      </Badge>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="outline" className="w-fit gap-1 text-accent-text">
+          <Sparkles size={12} aria-hidden />
+          Por descubrir
+        </Badge>
+        {character.adult ? <AdultBadge /> : null}
+      </div>
       <h3 className="font-serif text-headline-lg text-ink">{character.title}</h3>
       <p className="flex-1 text-body-sm italic text-ink-dim">{character.hook}</p>
       <BookLink character={character} />
@@ -103,6 +108,14 @@ const TOGGLES: Record<
     off: 'Ahora leerla cuesta óbolos desde la primera vez.',
     failure: 'No se pudo cambiar el precio de lectura.',
     invalidate: [['book']],
+  },
+  adult: {
+    label: '+18',
+    help: 'solo la verán cuentas mayores de edad',
+    on: 'Ahora es +18: solo la verán cuentas mayores de edad.',
+    off: 'Ya no es +18: la puede ver cualquier cuenta.',
+    failure: 'No se pudo cambiar la opción +18.',
+    invalidate: [['characters'], ['explore'], ['profile'], ['book']],
   },
 }
 
@@ -150,18 +163,36 @@ function StoryToggle({
   const checked = story?.[field] ?? false
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-body-sm text-ink">
-          <span className="font-semibold">{copy.label}</span>
-          <span className="text-ink-dim"> · {copy.help}</span>
-        </span>
-        <Switch
-          checked={checked}
-          disabled={!story}
-          aria-label={`${copy.label}: ${character.title}`}
-          onCheckedChange={(next) => toggle.mutate(next)}
-        />
-      </div>
+      {field === 'adult' ? (
+        // +18 es una marca de contenido, no un interruptor de estado: casilla, como al crear.
+        <label className="flex min-h-touch cursor-pointer items-center justify-between gap-3 text-body-sm text-ink">
+          <span>
+            <span className="font-semibold">{copy.label}</span>
+            <span className="text-ink-dim"> · {copy.help}</span>
+          </span>
+          <input
+            type="checkbox"
+            checked={checked}
+            disabled={!story}
+            aria-label={`${copy.label}: ${character.title}`}
+            onChange={(event) => toggle.mutate(event.target.checked)}
+            className="h-5 w-5 shrink-0 cursor-pointer accent-[color:var(--ps-primary)] disabled:cursor-not-allowed"
+          />
+        </label>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-body-sm text-ink">
+            <span className="font-semibold">{copy.label}</span>
+            <span className="text-ink-dim"> · {copy.help}</span>
+          </span>
+          <Switch
+            checked={checked}
+            disabled={!story}
+            aria-label={`${copy.label}: ${character.title}`}
+            onCheckedChange={(next) => toggle.mutate(next)}
+          />
+        </div>
+      )}
       <p aria-live="polite" className="text-[13px] text-ink-dim empty:hidden">
         {toggle.isError ? '' : status}
       </p>
@@ -332,6 +363,11 @@ export function CharactersPage() {
                       />
                       <StoryToggle
                         field="freeFirstRead"
+                        character={c}
+                        story={customStories.data?.find((s) => s.characterId === c.id)}
+                      />
+                      <StoryToggle
+                        field="adult"
                         character={c}
                         story={customStories.data?.find((s) => s.characterId === c.id)}
                       />

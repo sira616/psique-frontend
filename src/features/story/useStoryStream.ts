@@ -5,10 +5,13 @@ import {
   type StoryMessage,
   type StoryState,
 } from '@/shared/lib/events'
+import { dailyLimitFrom, type DailyTurnLimit } from '@/api/account'
+import { policyErrorFrom, rememberRestriction, type StoryClosed } from '@/api/policy'
 import { refreshSession } from '@/shared/lib/apiClient'
 import { useAuthStore } from '@/stores/authStore'
 
-export type StreamMessage = StoryMessage & { streaming?: boolean }
+/** `ephemeral`: réplica que el servidor no guarda (reconducción); desaparece en el siguiente turno. */
+export type StreamMessage = StoryMessage & { streaming?: boolean; ephemeral?: boolean }
 
 /** Con sugerencia, `message` es el texto que dio el servidor: el optimista enseña lo que se guarda. */
 export type SendInput = { message: string } | { choiceId: string; message: string }
@@ -24,6 +27,22 @@ type UseStoryStreamResult = {
   dismissTransition: () => void
   /** Estado que llega fuera del chat (p. ej. al desbloquear capítulo) sin tocar los mensajes. */
   applyState: (state: StoryState) => void
+  /** La partida se cerró al enviar (403 `story_closed`). */
+  closed: StoryClosed | null
+  /** Fin de la restricción de cuenta recibida al enviar. */
+  restrictedUntil: string | null
+  /** Aviso de reconducción (422 `content_redirected`). */
+  redirectNotice: string | null
+  dismissRedirect: () => void
+  /** Texto que vuelve al compositor cuando el servidor no aceptó el mensaje. */
+  restoredDraft: { text: string; nonce: number } | null
+  /** Turno pendiente de confirmar la mayoría de edad (403 `adult_required`). */
+  adultPending: SendInput | null
+  cancelAdult: () => void
+  /** Cupo diario de turnos agotado al enviar (429 `daily_turn_limit`). */
+  dailyLimit: DailyTurnLimit | null
+  /** Olvida cierre, restricción y cupo recibidos (p. ej. tras reabrir desde las herramientas de dev). */
+  clearBlocks: () => void
 }
 
 /** 409 de `POST /chat`: capítulo bloqueado (trae el estado) o partida archivada. */
@@ -60,6 +79,12 @@ export function useStoryStream(storyId: string): UseStoryStreamResult {
   const [transition, setTransition] = useState<PhaseTransition | null>(null)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [closed, setClosed] = useState<StoryClosed | null>(null)
+  const [restrictedUntil, setRestrictedUntil] = useState<string | null>(null)
+  const [redirectNotice, setRedirectNotice] = useState<string | null>(null)
+  const [restoredDraft, setRestoredDraft] = useState<{ text: string; nonce: number } | null>(null)
+  const [adultPending, setAdultPending] = useState<SendInput | null>(null)
+  const [dailyLimit, setDailyLimit] = useState<DailyTurnLimit | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const seed = useCallback((msgs: StoryMessage[], initial: StoryState) => {
@@ -71,6 +96,19 @@ export function useStoryStream(storyId: string): UseStoryStreamResult {
   }, [])
 
   const dismissTransition = useCallback(() => setTransition(null), [])
+  const dismissRedirect = useCallback(() => setRedirectNotice(null), [])
+  const clearBlocks = useCallback(() => {
+    setClosed(null)
+    setRestrictedUntil(null)
+    setDailyLimit(null)
+  }, [])
+  // Al confirmar se reintenta solo; al cancelar, lo escrito vuelve al compositor para no perderlo.
+  const cancelAdult = useCallback(() => {
+    if (adultPending && !('choiceId' in adultPending)) {
+      setRestoredDraft({ text: adultPending.message, nonce: Date.now() })
+    }
+    setAdultPending(null)
+  }, [adultPending])
 
   const send = useCallback(
     async (input: SendInput) => {
@@ -84,8 +122,10 @@ export function useStoryStream(storyId: string): UseStoryStreamResult {
       const stamp = Date.now()
       const userId = `u-${stamp}`
       const assistantId = `a-${stamp}`
+      setRedirectNotice(null)
+      setAdultPending(null)
       setMessages((prev) => [
-        ...prev,
+        ...prev.filter((m) => !m.ephemeral),
         { id: userId, role: 'user', content: shown },
         { id: assistantId, role: 'assistant', content: '', streaming: true },
       ])
@@ -94,6 +134,11 @@ export function useStoryStream(storyId: string): UseStoryStreamResult {
 
       const patchAssistant = (fn: (m: StreamMessage) => StreamMessage) =>
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? fn(m) : m)))
+      const dropOptimistic = () => setMessages((prev) => prev.filter((m) => m.id !== userId && m.id !== assistantId))
+      // Solo lo escrito a mano vuelve al compositor: una sugerencia sigue ahí para elegirla otra vez.
+      const restoreDraft = () => {
+        if (!('choiceId' in input)) setRestoredDraft({ text: shown, nonce: stamp })
+      }
 
       try {
         // Con sugerencia solo viaja el id: el servidor usa su texto guardado, nunca el nuestro.
@@ -110,7 +155,56 @@ export function useStoryStream(storyId: string): UseStoryStreamResult {
           }
           throw new Error(conflict?.detail || 'No se pudo continuar la historia.')
         }
+        if (response.status === 403) {
+          // Rechazos de la política: llegan antes de abrir el stream y no se guarda nada.
+          const policy = policyErrorFrom(await response.json().catch(() => null))
+          dropOptimistic()
+          if (policy?.code === 'story_closed') {
+            setClosed(policy)
+            setRestrictedUntil(policy.restrictedUntil)
+            rememberRestriction(policy.restrictedUntil)
+            return
+          }
+          if (policy?.code === 'account_restricted') {
+            setRestrictedUntil(policy.restrictedUntil)
+            rememberRestriction(policy.restrictedUntil)
+            restoreDraft()
+            return
+          }
+          if (policy?.code === 'adult_required') {
+            setAdultPending(input)
+            return
+          }
+          throw new Error(policy?.detail || 'No se pudo continuar la historia.')
+        }
+        if (response.status === 429) {
+          // Cupo del día agotado: se rechaza antes del stream y no se guarda nada.
+          const body = await response.json().catch(() => null)
+          dropOptimistic()
+          const limit = dailyLimitFrom(body)
+          if (limit) {
+            setDailyLimit(limit)
+            restoreDraft()
+            return
+          }
+          restoreDraft()
+          throw new Error((body as { detail?: string } | null)?.detail || 'Demasiados mensajes seguidos. Espera un momento.')
+        }
         if (response.status === 422) {
+          const policy = policyErrorFrom(await response.json().catch(() => null))
+          if (policy?.code === 'content_redirected') {
+            // La réplica del personaje se enseña pero no se guarda: sustituye al turno optimista.
+            setMessages((prev) =>
+              prev
+                .filter((m) => m.id !== userId)
+                .map((m) =>
+                  m.id === assistantId ? { ...m, id: `r-${stamp}`, content: policy.reply, streaming: false, ephemeral: true } : m,
+                ),
+            )
+            setRedirectNotice(policy.detail)
+            restoreDraft()
+            return
+          }
           throw new Error('Esa opción ya no está disponible.')
         }
         if (!response.ok || !response.body) {
@@ -163,5 +257,24 @@ export function useStoryStream(storyId: string): UseStoryStreamResult {
     [storyId],
   )
 
-  return { messages, state, transition, streaming, error, send, seed, dismissTransition, applyState: setState }
+  return {
+    messages,
+    state,
+    transition,
+    streaming,
+    error,
+    send,
+    seed,
+    dismissTransition,
+    applyState: setState,
+    closed,
+    restrictedUntil,
+    redirectNotice,
+    dismissRedirect,
+    restoredDraft,
+    adultPending,
+    cancelAdult,
+    dailyLimit,
+    clearBlocks,
+  }
 }

@@ -3,6 +3,7 @@ import { Feather, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { BookAuthor, BookOut } from '@/api/books'
 import { modeLabel } from '@/features/book/format'
+import { AdultBadge } from '@/features/policy/AdultBadge'
 import { routes } from '@/router/paths'
 import { Avatar } from '@/shared/ui/Avatar'
 import { Badge } from '@/shared/ui/badge'
@@ -66,6 +67,7 @@ export function BookHeader({ book, actions }: { book: BookOut; actions: ReactNod
               {book.mode === 'concepto' ? <Sparkles size={12} aria-hidden /> : null}
               {modeLabel(book.mode)}
             </Badge>
+            {book.adult ? <AdultBadge /> : null}
             {book.isMine ? <Badge variant="outline">Tuya</Badge> : null}
             {book.isMine && !book.isPublic ? <Badge variant="outline">Privada</Badge> : null}
             {book.viewer.status === 'leido' ? <Badge variant="outline" className="text-gold">Leído</Badge> : null}

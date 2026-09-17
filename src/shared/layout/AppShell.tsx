@@ -34,12 +34,19 @@ function navLinkClassName({ isActive }: { isActive: boolean }) {
   )
 }
 
+/** La entrada Dev solo existe para cuentas dev; el backend cierra igualmente sus rutas. */
+function useNavItems(): NavItem[] {
+  const isDev = useAuthStore((s) => Boolean(s.user?.isDev))
+  return isDev ? [...NAV_ITEMS, { to: routes.dev, label: 'Dev' }] : NAV_ITEMS
+}
+
 function MainNav() {
+  const navItems = useNavItems()
   return (
     // En móvil no cabe junto a la marca: allí va dentro del menú desplegable.
     <nav aria-label="Principal" className="min-w-0 max-sm:hidden">
       <ul className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none]">
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <li key={item.to} className="shrink-0">
             <NavLink to={item.to} end={item.end} className={navLinkClassName}>
               {item.label}
@@ -55,6 +62,7 @@ function MobileMenu({ profileTo }: { profileTo: string | null }) {
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const buttonRef = useRef<HTMLButtonElement>(null)
+  const navItems = useNavItems()
 
   // Al navegar se cierra: el menú ya ha cumplido.
   useEffect(() => {
@@ -62,7 +70,7 @@ function MobileMenu({ profileTo }: { profileTo: string | null }) {
   }, [location.pathname])
 
   const items: NavItem[] = [
-    ...NAV_ITEMS,
+    ...navItems,
     ...(profileTo ? [{ to: profileTo, label: 'Tu perfil' }] : []),
     { to: routes.configuracion, label: 'Configuración' },
   ]

@@ -23,6 +23,8 @@ export type CustomStory = {
   isPublic: boolean
   /** Si la primera partida de cada lector no cuesta óbolos. */
   freeFirstRead: boolean
+  /** Solo la ven cuentas mayores de edad. */
+  adult: boolean
   /** Última vez que pasó de privada a pública; null si nunca lo fue. */
   publishedAt: string | null
   createdAt: string
@@ -34,6 +36,7 @@ export type CreateDefinida = CustomStoryDefinition & {
   hook?: string | null
   isPublic?: boolean
   freeFirstRead?: boolean
+  adult?: boolean
 }
 
 export type CreateConcepto = {
@@ -42,6 +45,7 @@ export type CreateConcepto = {
   tone?: string | null
   isPublic?: boolean
   freeFirstRead?: boolean
+  adult?: boolean
 }
 
 export type CreateCustomStory = CreateDefinida | CreateConcepto
@@ -57,7 +61,7 @@ export function listCustomStories() {
   return apiClient<CustomStory[]>('/api/custom-stories')
 }
 
-export type CustomStoryPatch = { isPublic?: boolean; freeFirstRead?: boolean }
+export type CustomStoryPatch = { isPublic?: boolean; freeFirstRead?: boolean; adult?: boolean }
 
 /** Manda solo lo que cambia: el backend exige al menos un campo. */
 export function updateCustomStory(id: string, patch: CustomStoryPatch) {

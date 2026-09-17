@@ -3,14 +3,18 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, BookOpen, LockKeyhole, RotateCcw } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { bookQueryKey, rereadBook, type BookOut } from '@/api/books'
+import { activeRestriction, policyErrorOf, rememberRestriction } from '@/api/policy'
 import { createStory } from '@/api/stories'
 import { readLabel } from '@/features/book/format'
 import { useWallet, walletQueryKey } from '@/features/economy/useWallet'
+import { RestrictionNotice } from '@/features/policy/PolicyNotice'
+import { useAdultGate } from '@/features/policy/useAdultGate'
 import { routes } from '@/router/paths'
 import { formatoMoneda } from '@/shared/economy/moneda'
 import { ApiError } from '@/shared/lib/apiClient'
 import type { Story } from '@/shared/lib/events'
 import { Button, ButtonLink } from '@/shared/ui/button'
+import { useAuthStore } from '@/stores/authStore'
 
 type BookActionsProps = { book: BookOut }
 
@@ -35,10 +39,39 @@ export function BookActions({ book }: BookActionsProps) {
     navigate(routes.story(story.id))
   }
 
-  const read = useMutation({ mutationFn: () => createStory(book.id), onSuccess: afterCharge })
-  const reread = useMutation({ mutationFn: () => rereadBook(book.id), onSuccess: afterCharge })
+  const gate = useAdultGate()
+  const sessionRestriction = useAuthStore((s) => s.user?.restrictedUntil)
+
+  function onPolicyError(error: Error, retry: () => void) {
+    const policy = policyErrorOf(error)
+    if (policy?.code === 'adult_required') gate.ask(retry)
+    if (policy?.code === 'account_restricted') rememberRestriction(policy.restrictedUntil)
+  }
+
+  const read = useMutation({
+    mutationFn: () => createStory(book.id),
+    onSuccess: afterCharge,
+    onError: (err) => onPolicyError(err, () => read.mutate()),
+  })
+  const reread = useMutation({
+    mutationFn: () => rereadBook(book.id),
+    onSuccess: afterCharge,
+    onError: (err) => onPolicyError(err, () => reread.mutate()),
+  })
   const pending = read.isPending || reread.isPending
-  const error = read.error ?? reread.error
+  const rawError = read.error ?? reread.error
+  const rawPolicy = policyErrorOf(rawError)
+  // Estos dos se explican con su propio aviso o diálogo, no como error suelto.
+  const error = rawPolicy?.code === 'adult_required' || rawPolicy?.code === 'account_restricted' ? null : rawError
+  const restrictedUntil =
+    activeRestriction(rawPolicy?.code === 'account_restricted' ? rawPolicy.restrictedUntil : null) ??
+    activeRestriction(sessionRestriction)
+
+  /** Con `adultRequired` se pregunta antes de pedir nada; el 403 queda como red de seguridad. */
+  function guarded(action: () => void) {
+    if (viewer.adultRequired) gate.ask(action)
+    else action()
+  }
 
   useEffect(() => {
     if (confirmingReread) cancelRef.current?.focus()
@@ -67,20 +100,41 @@ export function BookActions({ book }: BookActionsProps) {
       ) : null}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        {continuing ? (
+        {continuing && viewer.adultRequired ? (
+          <Button
+            variant="brand"
+            size="lg"
+            className="sm:min-w-56"
+            onClick={() => guarded(() => navigate(routes.story(viewer.activeStoryId!)))}
+          >
+            <BookOpen size={18} aria-hidden />
+            Continuar
+          </Button>
+        ) : continuing ? (
           <ButtonLink variant="brand" size="lg" className="sm:min-w-56" to={routes.story(viewer.activeStoryId!)}>
             <BookOpen size={18} aria-hidden />
             Continuar
           </ButtonLink>
         ) : (
-          <Button variant="brand" size="lg" className="sm:min-w-56" disabled={pending} onClick={() => read.mutate()}>
+          <Button
+            variant="brand"
+            size="lg"
+            className="sm:min-w-56"
+            disabled={pending || Boolean(restrictedUntil)}
+            onClick={() => guarded(() => read.mutate())}
+          >
             <BookOpen size={18} aria-hidden />
             {read.isPending ? 'Preparando la escena…' : readLabel(viewer.primaryAction.cost)}
           </Button>
         )}
 
         {showReread && !confirmingReread ? (
-          <Button variant="outline" size="lg" disabled={pending} onClick={() => setConfirmingReread(true)}>
+          <Button
+            variant="outline"
+            size="lg"
+            disabled={pending || Boolean(restrictedUntil)}
+            onClick={() => setConfirmingReread(true)}
+          >
             <RotateCcw size={18} aria-hidden />
             Releer · {formatoMoneda(viewer.rereadCost)}
           </Button>
@@ -111,12 +165,21 @@ export function BookActions({ book }: BookActionsProps) {
             >
               Cancelar
             </Button>
-            <Button variant="brand" size="sm" disabled={pending} onClick={() => reread.mutate()}>
+            <Button
+              variant="brand"
+              size="sm"
+              disabled={pending || Boolean(restrictedUntil)}
+              onClick={() => guarded(() => reread.mutate())}
+            >
               {reread.isPending ? 'Preparando la escena…' : `Sí, releer · ${formatoMoneda(viewer.rereadCost)}`}
               <ArrowRight size={14} aria-hidden />
             </Button>
           </div>
         </div>
+      ) : null}
+
+      {restrictedUntil ? (
+        <RestrictionNotice restrictedUntil={restrictedUntil} role={rawPolicy ? 'alert' : 'status'} />
       ) : null}
 
       {balance !== undefined ? (
@@ -144,6 +207,8 @@ export function BookActions({ book }: BookActionsProps) {
           )}
         </p>
       ) : null}
+
+      {gate.dialog}
     </div>
   )
 }

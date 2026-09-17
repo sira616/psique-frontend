@@ -10,5 +10,6 @@ export const routes = {
   profile: (handle: string) => `/u/${encodeURIComponent(handle)}`,
   configuracion: '/configuracion',
   rascaYGana: '/rasca-y-gana',
+  dev: '/dev',
   notFound: '*',
 } as const

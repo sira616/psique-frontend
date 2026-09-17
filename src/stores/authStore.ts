@@ -7,6 +7,10 @@ export type AuthUser = {
   /** Dirección pública del perfil (`/u/<handle>`). No sirve para entrar: eso es `username`. */
   handle: string
   isDev: boolean
+  /** La cuenta ha confirmado ser mayor de edad: puede ver y leer libros +18. */
+  adultConfirmed: boolean
+  /** Fin de la restricción por incumplir las normas; null si no hay ninguna vigente. */
+  restrictedUntil: string | null
 }
 
 type AuthState = {
@@ -14,7 +18,7 @@ type AuthState = {
   user: AuthUser | null
   setSession: (payload: { accessToken: string; user: AuthUser }) => void
   clearSession: () => void
-  patchUser: (changes: Partial<Pick<AuthUser, 'displayName' | 'handle'>>) => void
+  patchUser: (changes: Partial<Omit<AuthUser, 'id' | 'username'>>) => void
 }
 
 /**

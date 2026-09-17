@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { Archive, EyeOff } from 'lucide-react'
+import { Archive, CircleSlash, EyeOff } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { bookHistoryQueryKey, fetchBookHistory } from '@/api/books'
 import { formatBookDate } from '@/features/book/format'
 import { routes } from '@/router/paths'
 import { Card } from '@/shared/ui/card'
 
-/** Lecturas archivadas del usuario actual. El backend solo devuelve las suyas. */
+/** Lecturas archivadas y cerradas del usuario actual. El backend solo devuelve las suyas. */
 export function ReadingHistory({ bookId }: { bookId: string }) {
   const history = useQuery({ queryKey: bookHistoryQueryKey(bookId), queryFn: () => fetchBookHistory(bookId) })
 
@@ -27,14 +27,21 @@ export function ReadingHistory({ bookId }: { bookId: string }) {
         </div>
         <ol className="space-y-3">
           {history.data.map((item) => {
+            const closed = item.status === 'cerrada'
             const start = formatBookDate(item.startedAt)
-            const end = formatBookDate(item.archivedAt)
+            const end = formatBookDate(closed ? item.closedAt : item.archivedAt)
             return (
               <li key={item.storyId} className="border-t border-[color:var(--ps-line)] pt-3 first:border-t-0 first:pt-0">
                 <p className="text-body-sm text-ink">
                   {start ?? 'Fecha desconocida'}
                   {end ? ` – ${end}` : ''}
                 </p>
+                {closed ? (
+                  <p className="flex items-center gap-1.5 text-body-sm font-semibold text-ink-dim">
+                    <CircleSlash size={14} aria-hidden className="text-gold" />
+                    Cerrada por incumplir las normas
+                  </p>
+                ) : null}
                 <p className="text-body-sm text-ink-dim">
                   Capítulo {item.phaseIndex + 1} de {item.phaseCount}:{' '}
                   <span className="font-semibold text-gold">{item.phaseLabel}</span> · afinidad final {item.affinity}
@@ -44,7 +51,10 @@ export function ReadingHistory({ bookId }: { bookId: string }) {
                   className="inline-flex min-h-touch items-center text-body-sm font-semibold text-accent-text underline"
                 >
                   Ver la conversación
-                  <span className="sr-only"> de la lectura {start ? `empezada el ${start}` : 'archivada'}</span>
+                  <span className="sr-only">
+                    {' '}
+                    de la lectura {start ? `empezada el ${start}` : closed ? 'cerrada' : 'archivada'}
+                  </span>
                 </Link>
               </li>
             )

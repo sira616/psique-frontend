@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Send } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 
@@ -9,6 +9,8 @@ type ChatComposerProps = {
   disabled?: boolean
   placeholder?: string
   className?: string
+  /** Devuelve un texto al compositor (p. ej. un mensaje que el servidor no aceptó). `nonce` permite repetirlo. */
+  restore?: { text: string; nonce: number } | null
 }
 
 export function ChatComposer({
@@ -16,8 +18,13 @@ export function ChatComposer({
   disabled = false,
   placeholder = 'Escribe qué dices o haces…',
   className,
+  restore,
 }: ChatComposerProps) {
   const [draft, setDraft] = useState('')
+
+  useEffect(() => {
+    if (restore) setDraft(restore.text)
+  }, [restore])
 
   function submit() {
     const text = draft.trim()

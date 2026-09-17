@@ -39,6 +39,8 @@ export type BookViewer = {
   activeStoryId: string | null
   progress: BookProgress | null
   primaryAction: { kind: 'leer' | 'continuar'; cost: number }
+  /** Libro +18 y la cuenta no lo ha confirmado: hay que preguntar antes de leer. */
+  adultRequired: boolean
   canReread: boolean
   rereadCost: number
   canReview: boolean
@@ -61,6 +63,7 @@ export type BookOut = {
   isPublic: boolean
   chapterCount: number
   freeFirstRead: boolean
+  adult: boolean
   readCost: number
   publishedAt: string | null
   createdAt: string | null
@@ -70,8 +73,10 @@ export type BookOut = {
 
 export type HistoryItem = {
   storyId: string
+  status: 'archivada' | 'activa' | 'cerrada'
   startedAt: string | null
   archivedAt: string | null
+  closedAt: string | null
   phase: string
   phaseLabel: string
   phaseIndex: number
@@ -88,6 +93,7 @@ export type BookCard = {
   tone: string | null
   author: BookAuthor | null
   readers: number
+  adult: boolean
 }
 
 export type ReviewInput = { rating: number; text: string | null }
