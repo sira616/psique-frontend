@@ -2,7 +2,8 @@
 
 export type PhaseId = 'conocerse' | 'confianza' | 'tension' | 'conflicto' | 'desenlace'
 
-export type QuickChoice = { id: string; label: string }
+/** `message` es el texto que se guarda y se manda al modelo si se elige. */
+export type QuickChoice = { id: string; label: string; message: string }
 
 export type StoryState = {
   phase: PhaseId
@@ -11,6 +12,8 @@ export type StoryState = {
   phaseCount: number
   affinity: number
   turnCount: number
+  /** Escena o tema en curso al que responden las sugerencias. */
+  scene?: string | null
   quickChoices: QuickChoice[]
   /** Economía: el capítulo siguiente espera a que se pague. Opcionales por compatibilidad. */
   chapter_locked?: boolean

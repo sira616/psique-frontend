@@ -122,33 +122,70 @@ export const PHASES: { id: PhaseId; label: string }[] = [
   { id: 'desenlace', label: 'Desenlace' },
 ]
 
-export const quickChoicesByPhase: Record<PhaseId, QuickChoice[]> = {
+// Reserva por fase, como `QUICK_CHOICES` del backend. Los ids reales llevan el turno delante.
+export const quickChoicesByPhase: Record<PhaseId, Omit<QuickChoice, 'id'>[]> = {
   conocerse: [
-    { id: 'preguntar_trabajo', label: 'Preguntar por su oficio' },
-    { id: 'hacer_broma', label: 'Romper el hielo con humor' },
-    { id: 'presentarse', label: 'Presentarte' },
+    { label: 'Preguntar por su oficio', message: 'Cuéntame, ¿cómo acabaste dedicándote a esto?' },
+    { label: 'Romper el hielo con humor', message: '*Sonrío* Tengo la sensación de que no es la primera vez que te pasa algo así.' },
+    { label: 'Presentarte', message: 'Por cierto, no me he presentado. Es un placer conocerte.' },
   ],
   confianza: [
-    { id: 'compartir_recuerdo', label: 'Compartir un recuerdo' },
-    { id: 'proponer_paseo', label: 'Proponer un paseo' },
-    { id: 'preguntar_sueno', label: 'Preguntar por sus sueños' },
+    { label: 'Compartir un recuerdo', message: 'Esto me recuerda a algo que me pasó hace tiempo... ¿te lo cuento?' },
+    { label: 'Proponer un paseo', message: '¿Te apetece dar un paseo cuando acabes?' },
+    { label: 'Preguntar por sus sueños', message: 'Si pudieras cambiar una cosa de tu vida mañana, ¿cuál sería?' },
   ],
   tension: [
-    { id: 'sincerarse', label: 'Sincerarte' },
-    { id: 'dar_espacio', label: 'Darle espacio' },
-    { id: 'cambiar_tema', label: 'Cambiar de tema' },
+    { label: 'Sincerarte', message: 'Llevo un rato queriendo decirte algo y no sé muy bien cómo.' },
+    { label: 'Darle espacio', message: 'No hace falta que digas nada ahora. Estoy bien así.' },
+    { label: 'Cambiar de tema', message: '*Carraspeo* Bueno... ¿y qué tal el día?' },
   ],
   conflicto: [
-    { id: 'reconciliar', label: 'Buscar la reconciliación' },
-    { id: 'pedir_perdon', label: 'Pedir perdón' },
-    { id: 'tomar_distancia', label: 'Tomar distancia' },
+    { label: 'Buscar la reconciliación', message: 'No quiero que esto se quede así. ¿Podemos hablarlo con calma?' },
+    { label: 'Pedir perdón', message: 'Creo que te he hecho daño sin querer. Lo siento de verdad.' },
+    { label: 'Tomar distancia', message: 'Quizá necesitemos un poco de tiempo cada uno.' },
   ],
   desenlace: [
-    { id: 'proponer_futuro', label: 'Hablar del futuro' },
-    { id: 'agradecer', label: 'Dar las gracias' },
-    { id: 'despedirse', label: 'Despedirse' },
+    { label: 'Hablar del futuro', message: '¿Y ahora qué? Porque yo no quiero que esto acabe aquí.' },
+    { label: 'Dar las gracias', message: 'Gracias por dejarme entrar en tu mundo.' },
+    { label: 'Despedirse', message: '*Te abrazo* Cuídate mucho, ¿vale?' },
   ],
 }
+
+export const phaseSceneTitles: Record<PhaseId, string> = {
+  conocerse: 'Primer encuentro',
+  confianza: 'Ganando confianza',
+  tension: 'Lo que no se dice',
+  conflicto: 'Un malentendido',
+  desenlace: 'El final del camino',
+}
+
+/** Escenas que en el backend propondría el extractor. El mock cambia de escena cada dos turnos. */
+export const mockScenes: { scene: string; choices: Omit<QuickChoice, 'id'>[] }[] = [
+  {
+    scene: 'En el taller: la carta escondida',
+    choices: [
+      { label: 'Preguntar por la carta', message: '¿De quién es esa carta que escondes entre las páginas?' },
+      { label: 'Bromear con el misterio', message: 'Si es un mapa del tesoro, pido la mitad.' },
+      { label: 'No insistir', message: '*Aparto la mirada de la carta* Perdona, no es asunto mío.' },
+    ],
+  },
+  {
+    scene: 'Bajo la lluvia: el paraguas compartido',
+    choices: [
+      { label: 'Ofrecer tu paraguas', message: '*Abro el paraguas y te hago sitio* Cabemos los dos si no te importa mojarte un poco.' },
+      { label: 'Proponer un café', message: 'Conozco un sitio aquí al lado. ¿Esperamos a que escampe con un café?' },
+      { label: 'Preguntar por su día', message: '¿Qué tal ha ido el día? Pareces cansada.' },
+    ],
+  },
+  {
+    scene: 'En la cafetería: recuerdos de infancia',
+    choices: [
+      { label: 'Contar un recuerdo', message: 'Mi abuela también tenía una librería. Me escondía entre las estanterías.' },
+      { label: 'Escuchar sin prisa', message: '*Apoyo la barbilla en la mano* Sigue, me encanta cómo lo cuentas.' },
+      { label: 'Hacerle un cumplido', message: 'Tienes una forma de mirar las cosas viejas que las hace nuevas.' },
+    ],
+  },
+]
 
 export const mockReplies = [
   '*Sonríe sin querer y aparta la mirada un segundo.* Vaya. No esperaba que dijeras eso.\n\n¿Siempre eres así de directo, o es la lluvia?',

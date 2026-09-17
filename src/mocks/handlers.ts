@@ -12,7 +12,7 @@ import type { StoryCard } from '@/api/explore'
 import type { MyProfile, PublicProfile, ReadingItem } from '@/api/profile'
 import { HANDLE_PATTERN, linkProblem, normalizeDisplayName, PROFILE_LIMITS } from '@/features/profile/limits'
 import { validateConcepto, validateDefinida, type FieldErrors } from '@/features/customStories/limits'
-import type { Character, Story, StorySummary, StoryStreamEvent } from '@/shared/lib/events'
+import type { Character, PhaseId, Story, StorySummary, StoryStreamEvent } from '@/shared/lib/events'
 import {
   CONTENT_MESSAGES,
   DEMO_USER,
@@ -25,6 +25,8 @@ import {
   greetings,
   mockCharacters,
   mockReplies,
+  mockScenes,
+  phaseSceneTitles,
   quickChoicesByPhase,
   seedCustomStories,
   seedOtherStories,
@@ -280,7 +282,22 @@ function cookieRefresh(request: Request): string | null {
   return match?.[1] ?? lastRefreshToken
 }
 
-function stateFor(phaseIndex: number, affinity: number, turnCount: number, locked = false) {
+/**
+ * Escena y sugerencias como las da el backend: en el turno 0 (o recién desbloqueado un
+ * capítulo) la reserva de la fase; después, una escena de `mockScenes` que cambia cada dos
+ * turnos. Los ids llevan el turno, así una sugerencia vieja da 422.
+ */
+function sceneFor(phaseId: PhaseId, turnCount: number, fromPhase: boolean) {
+  const picked = mockScenes[Math.floor((turnCount - 1) / 2) % mockScenes.length]
+  const useScene = !fromPhase && turnCount > 0 && picked
+  const choices = useScene ? picked.choices : quickChoicesByPhase[phaseId]
+  return {
+    scene: useScene ? picked.scene : phaseSceneTitles[phaseId],
+    quickChoices: choices.map((c, i) => ({ id: `t${turnCount}s${i + 1}`, ...c })),
+  }
+}
+
+function stateFor(phaseIndex: number, affinity: number, turnCount: number, locked = false, fromPhase = false) {
   const phase = PHASES[phaseIndex] ?? PHASES[0]!
   return {
     phase: phase.id,
@@ -289,7 +306,7 @@ function stateFor(phaseIndex: number, affinity: number, turnCount: number, locke
     phaseCount: PHASES.length,
     affinity,
     turnCount,
-    quickChoices: quickChoicesByPhase[phase.id],
+    ...sceneFor(phase.id, turnCount, fromPhase),
     chapter_locked: locked,
     next_phase: locked ? (PHASES[phaseIndex + 1]?.id ?? null) : null,
     chapter_cost: CHAPTER_COST,
@@ -1008,9 +1025,9 @@ export const handlers = [
     const body = (await request.json()) as { message?: string; choiceId?: string }
     const choice = story.state.quickChoices.find((c) => c.id === body.choiceId)
     if (body.choiceId && !choice) {
-      return HttpResponse.json({ detail: 'Esa opción no está disponible en esta fase.' }, { status: 422 })
+      return HttpResponse.json({ detail: 'Esa opción ya no está disponible.' }, { status: 422 })
     }
-    const userText = choice?.label ?? body.message ?? ''
+    const userText = choice?.message ?? body.message ?? ''
     const turn = story.state.turnCount + 1
     const reply = mockReplies[turn % mockReplies.length]!
     // Cada cuatro turnos tocaría fase nueva, pero en el mock toda fase nueva se paga: queda
@@ -1061,7 +1078,7 @@ export const handlers = [
     await delay(150)
     const wallet = addMovement(user.id, -CHAPTER_COST, 'capitulo', story.id)
     const from = story.state.phase
-    story.state = stateFor(story.state.phaseIndex + 1, story.state.affinity, story.state.turnCount)
+    story.state = stateFor(story.state.phaseIndex + 1, story.state.affinity, story.state.turnCount, false, true)
     return HttpResponse.json({
       ...story.state,
       transition: { from, to: story.state.phase, reason: 'Capítulo desbloqueado (mock).' },

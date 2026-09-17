@@ -58,9 +58,10 @@ export function StoryPage() {
   const quickActions = (
     <QuickActionBar
       choices={state.quickChoices}
+      scene={state.scene}
       disabled={inputDisabled}
       layout={isDesktop ? 'stack' : 'scroll'}
-      onChoose={(c) => void stream.send({ choiceId: c.id, label: c.label })}
+      onChoose={(c) => void stream.send({ choiceId: c.id, message: c.message })}
     />
   )
 

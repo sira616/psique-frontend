@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, screen, render, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -86,6 +87,37 @@ describe('useStoryStream', () => {
     expect(result.current.state?.turnCount).toBe(1)
     expect(result.current.error).toBeNull()
   })
+
+  it('al elegir una sugerencia enseña el texto real que se guarda, no la etiqueta', async () => {
+    await loginDemo()
+    const story = await apiClient<Story>('/api/stories', { method: 'POST', body: { characterId: 'lucia' } })
+    // Puede ser la partida activa de otro test: cualquier sugerencia vale mientras su texto no sea la etiqueta.
+    const choice = story.state.quickChoices[0]!
+    expect(choice.message).not.toBe(choice.label)
+    let sent: unknown = null
+    server.events.on('request:start', async ({ request }) => {
+      if (request.url.endsWith('/chat')) sent = await request.clone().json()
+    })
+
+    const { result } = renderHook(() => useStoryStream(story.id))
+    act(() => result.current.seed(story.messages, story.state))
+    let pending: Promise<void>
+    act(() => {
+      pending = result.current.send({ choiceId: choice.id, message: choice.message })
+    })
+    // Optimista: antes de que el servidor responda ya está el texto definitivo.
+    expect(result.current.messages.at(-2)).toMatchObject({ role: 'user', content: choice.message })
+    await act(async () => {
+      await pending
+    })
+    server.events.removeAllListeners()
+
+    const shown = result.current.messages.filter((m) => m.role === 'user').at(-1)?.content
+    expect(shown).toBe(choice.message)
+    expect(sent).toEqual({ choiceId: choice.id })
+    const reloaded = await apiClient<Story>(`/api/stories/${story.id}`)
+    expect(reloaded.messages.filter((m) => m.role === 'user').at(-1)?.content).toBe(shown)
+  })
 })
 
 describe('validaciones de formulario', () => {
@@ -135,6 +167,23 @@ describe('capítulo bloqueado', () => {
     for (const choice of choices) expect(choice).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent('El siguiente capítulo está bloqueado.')
     expect(await screen.findByRole('button', { name: /Desbloquear capítulo/ })).toBeEnabled()
+  })
+
+  it('muestra la escena sobre las sugerencias y la actualiza con cada turno', async () => {
+    const story = await apiClient<Story>('/api/stories', { method: 'POST', body: { characterId: 'lucia' } })
+    renderStory(`/historia/${story.id}`)
+
+    const toolbar = await screen.findByRole('toolbar', { name: 'Sugerencias' })
+    expect(toolbar).toHaveAccessibleDescription(`Escena: ${story.state.scene}`)
+    await userEvent.click(within(toolbar).getByRole('button', { name: 'Presentarte' }))
+
+    expect(await screen.findByText('Por cierto, no me he presentado. Es un placer conocerte.')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('toolbar', { name: 'Sugerencias' })).toHaveAccessibleDescription(
+        'Escena: En el taller: la carta escondida',
+      ),
+    )
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Preguntar por la carta' })).toBeEnabled())
   })
 
   it('con un 409 chapter_locked aplica el estado recibido sin dejar mensajes fantasma', async () => {

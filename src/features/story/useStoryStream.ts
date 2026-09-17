@@ -10,7 +10,8 @@ import { useAuthStore } from '@/stores/authStore'
 
 export type StreamMessage = StoryMessage & { streaming?: boolean }
 
-export type SendInput = { message: string } | { choiceId: string; label: string }
+/** Con sugerencia, `message` es el texto que dio el servidor: el optimista enseña lo que se guarda. */
+export type SendInput = { message: string } | { choiceId: string; message: string }
 
 type UseStoryStreamResult = {
   messages: StreamMessage[]
@@ -73,7 +74,7 @@ export function useStoryStream(storyId: string): UseStoryStreamResult {
 
   const send = useCallback(
     async (input: SendInput) => {
-      const shown = 'message' in input ? input.message.trim() : input.label
+      const shown = input.message.trim()
       if (!shown) return
 
       abortRef.current?.abort()
@@ -85,8 +86,6 @@ export function useStoryStream(storyId: string): UseStoryStreamResult {
       const assistantId = `a-${stamp}`
       setMessages((prev) => [
         ...prev,
-        // Con quick choice el texto real lo pone el servidor; aquí se enseña la etiqueta
-        // hasta que la historia se recargue.
         { id: userId, role: 'user', content: shown },
         { id: assistantId, role: 'assistant', content: '', streaming: true },
       ])
@@ -97,7 +96,8 @@ export function useStoryStream(storyId: string): UseStoryStreamResult {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? fn(m) : m)))
 
       try {
-        const body = 'message' in input ? { message: shown } : { choiceId: input.choiceId }
+        // Con sugerencia solo viaja el id: el servidor usa su texto guardado, nunca el nuestro.
+        const body = 'choiceId' in input ? { choiceId: input.choiceId } : { message: shown }
         const response = await openStream(storyId, body, controller.signal)
         if (response.status === 409) {
           // El servidor rechaza el turno antes de abrir el stream: no se guardó nada, así que
