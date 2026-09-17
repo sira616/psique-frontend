@@ -1,0 +1,101 @@
+@import 'tailwindcss';
+@import './styles/tokens.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-bg-0: var(--ps-bg-0);
+  --color-surf-1: var(--ps-surf-1);
+  --color-surf-2: var(--ps-surf-2);
+  --color-surf-3: var(--ps-surf-3);
+  --color-ink: var(--ps-ink);
+  --color-ink-dim: var(--ps-ink-dim);
+  --color-ink-faint: var(--ps-ink-faint);
+  --color-primary: var(--ps-primary);
+  --color-primary-deep: var(--ps-primary-deep);
+  --color-on-primary: var(--ps-on-primary);
+  --color-accent-text: var(--ps-accent-text);
+  --color-gold: var(--ps-gold);
+  --color-on-gold: var(--ps-on-gold);
+  --color-error: var(--ps-error);
+  --color-outline-variant: var(--ps-line-strong);
+
+  --font-sans: var(--ps-font-sans);
+  --font-serif: var(--ps-font-serif);
+
+  --spacing-touch: 44px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+
+  --text-display: 32px;
+  --text-display--line-height: 40px;
+  --text-headline-lg: 24px;
+  --text-headline-lg--line-height: 32px;
+  --text-headline-md: 20px;
+  --text-headline-md--line-height: 28px;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 20px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--ps-font-sans);
+    color: var(--ps-ink);
+    background: var(--ps-bg-0);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  svg {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ps-accent-text);
+    outline-offset: 2px;
+  }
+}
+
+.ps-cta {
+  transition: transform 180ms ease-out, box-shadow 180ms ease-out;
+}
+.ps-cta:hover:not(:disabled) {
+  transform: scale(1.02);
+}
+.ps-cta:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Barra de afinidad: el relleno se anima al cambiar de valor. */
+.ps-affinity-fill {
+  transition: width 600ms ease-out;
+}
+
+@keyframes ps-phase-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.ps-phase-toast {
+  animation: ps-phase-in 400ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-cta,
+  .ps-cta:hover:not(:disabled),
+  .ps-cta:active:not(:disabled) {
+    transform: none;
+    transition: none;
+  }
+  .ps-affinity-fill,
+  .ps-phase-toast {
+    transition: none;
+    animation: none;
+  }
+}

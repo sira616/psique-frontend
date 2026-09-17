@@ -1,0 +1,73 @@
+/**
+ * Psique — tokens de diseño.
+ * Oscuro por defecto (ciruela y luz de vela); `.light` remapea a papel cálido.
+ * Los pares de texto están replicados en `src/shared/lib/wcagPalette.ts` y un test
+ * comprueba AA: si cambias un color aquí, cámbialo allí.
+ */
+
+:root {
+  --ps-bg-0: #120d12;
+  --ps-surf-1: #1c1419;
+  --ps-surf-2: #241a20;
+  --ps-surf-3: #2e2129;
+  --ps-line: rgba(255, 235, 240, 0.08);
+  --ps-line-strong: rgba(255, 235, 240, 0.14);
+
+  --ps-ink: #f3e9ec;
+  --ps-ink-dim: #c3b1b8;
+  --ps-ink-faint: #a08e96;
+
+  --ps-primary: #b8395c;
+  --ps-primary-deep: #8e2845;
+  --ps-on-primary: #ffffff;
+  --ps-accent-text: #ee9ab0;
+  --ps-gold: #e0b27a;
+  --ps-on-gold: #2a1a0a;
+  --ps-error: #ff9a91;
+
+  --ps-shadow-md: 0 12px 30px -14px rgba(0, 0, 0, 0.7), 0 2px 8px -4px rgba(0, 0, 0, 0.5);
+  --ps-shadow-glow: 0 12px 34px -14px rgba(184, 57, 92, 0.55);
+  --ps-sheen: rgba(255, 235, 240, 0.1);
+  --ps-inset-shine: rgba(255, 255, 255, 0.18);
+  --ps-control-hover: rgba(255, 235, 240, 0.06);
+  --ps-focus-ring: rgba(238, 154, 176, 0.22);
+  --ps-focus-border: rgba(238, 154, 176, 0.7);
+  --ps-glow-rose: radial-gradient(circle, rgba(184, 57, 92, 0.28) 0%, transparent 68%);
+  --ps-glow-gold: radial-gradient(circle, rgba(224, 178, 122, 0.18), transparent 70%);
+  --ps-canvas-radial: radial-gradient(900px 640px at 50% -8%, #2a1620 0%, #170f14 45%, var(--ps-bg-0) 75%);
+
+  --ps-font-sans: 'Atkinson Hyperlegible Next', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --ps-font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+}
+
+.light {
+  --ps-bg-0: #faf5f2;
+  --ps-surf-1: #ffffff;
+  --ps-surf-2: #f6eeea;
+  --ps-surf-3: #ecdfd9;
+  --ps-line: rgba(42, 26, 34, 0.08);
+  --ps-line-strong: rgba(42, 26, 34, 0.16);
+
+  --ps-ink: #2a1a22;
+  --ps-ink-dim: #5c4450;
+  --ps-ink-faint: #76606b;
+
+  --ps-primary: #a3324f;
+  --ps-primary-deep: #7f2440;
+  --ps-on-primary: #ffffff;
+  --ps-accent-text: #962b48;
+  --ps-gold: #8a5a1c;
+  --ps-on-gold: #ffffff;
+  --ps-error: #b3261e;
+
+  --ps-shadow-md: 0 14px 32px -16px rgba(42, 26, 34, 0.16), 0 4px 12px -6px rgba(42, 26, 34, 0.08);
+  --ps-shadow-glow: 0 12px 28px -14px rgba(163, 50, 79, 0.35);
+  --ps-sheen: rgba(42, 26, 34, 0.06);
+  --ps-inset-shine: rgba(255, 255, 255, 0.35);
+  --ps-control-hover: rgba(42, 26, 34, 0.05);
+  --ps-focus-ring: rgba(163, 50, 79, 0.16);
+  --ps-focus-border: rgba(163, 50, 79, 0.6);
+  --ps-glow-rose: radial-gradient(circle, rgba(163, 50, 79, 0.16) 0%, transparent 70%);
+  --ps-glow-gold: radial-gradient(circle, rgba(224, 178, 122, 0.28), transparent 70%);
+  --ps-canvas-radial: radial-gradient(1000px 700px at 50% -12%, #f6e1e6 0%, #f8ede9 40%, var(--ps-bg-0) 72%);
+}
