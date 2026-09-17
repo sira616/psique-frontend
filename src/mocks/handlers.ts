@@ -1681,6 +1681,20 @@ export function __resetCustomStories() {
   demoSeeded = false
 }
 
+/**
+ * Para tests: estado del mock como recién cargado, incluidas sesiones y secuencias. Lo llama
+ * tests/setup.ts antes de cada test para que ninguno dependa del orden ni herede nada.
+ */
+export function __resetMockState() {
+  __resetCustomStories()
+  stories.clear()
+  sessions.clear()
+  lastRefreshToken = null
+  refreshFailOnce = false
+  scratchCardSeq = 0
+  reviewSeq = 0
+}
+
 /** Para tests: el siguiente refresh falla una vez. */
 export function __failNextRefresh() {
   refreshFailOnce = true

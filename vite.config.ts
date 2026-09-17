@@ -5,7 +5,8 @@ import path from 'node:path'
 import type { Server } from 'node:http'
 import { createServer } from '@mswjs/http-middleware'
 
-const MOCK_PORT = 8787
+// MOCK_API_PORT deja al e2e levantar su propio mock sin compartir estado con un dev:mock abierto.
+const MOCK_PORT = Number(process.env.MOCK_API_PORT ?? 8787)
 const MOCK_HOST = '127.0.0.1'
 
 let mockServer: Server | null = null
@@ -83,6 +84,29 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+      },
+    },
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            // Vendors que cambian poco, en chunks propios: siguen en la caché del navegador
+            // entre despliegues de la app. El markdown solo lo usa la partida y va aparte para
+            // no entrar en la carga inicial (sus dependencias las arrastra el propio grupo).
+            groups: [
+              {
+                name: 'react-vendor',
+                test: /node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|@tanstack[\\/][^\\/]+)[\\/]/,
+                priority: 20,
+              },
+              {
+                name: 'markdown',
+                test: /node_modules[\\/](react-markdown|rehype-sanitize)[\\/]/,
+                priority: 10,
+              },
+            ],
+          },
+        },
       },
     },
     server: {

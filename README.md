@@ -1,5 +1,7 @@
 # Psique — frontend
 
+[![CI](https://github.com/sira616/psique-frontend/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/sira616/psique-frontend/actions/workflows/ci.yml)
+
 Vite + React 19 + TypeScript + Tailwind 4. Chat de historias románticas con streaming,
 indicador de fase y afinidad y sugerencias de acción.
 
@@ -20,7 +22,11 @@ Para el backend real, ver `../psique-backend/README.md`.
 ```powershell
 npm test           # vitest (unitarios + contraste WCAG AA de la paleta)
 npm run build      # tsc -b + vite build
+npm run e2e        # Playwright + axe contra la API simulada (puerto 5195, solo Chromium)
 ```
+
+La primera vez, para el e2e: `npx playwright install chromium`. En cada push y PR a `master`,
+GitHub Actions (`.github/workflows/ci.yml`) pasa typecheck, vitest, build y el e2e.
 
 ## Estructura
 
@@ -53,5 +59,4 @@ src/
   desarrollo/preview.
 - Tras una *quick choice* la burbuja muestra la etiqueta; el texto real que guarda el
   servidor aparece al recargar la historia.
-- Sin tests e2e (Playwright) ni auditoría axe todavía.
 - La sesión no sobrevive a una recarga: valorar refresh en cookie `HttpOnly`.
