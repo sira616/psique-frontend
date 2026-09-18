@@ -11,6 +11,10 @@ export type AuthUser = {
   adultConfirmed: boolean
   /** Fin de la restricción por incumplir las normas; null si no hay ninguna vigente. */
   restrictedUntil: string | null
+  /** Versión vigente de términos y privacidad (la decide el backend). */
+  termsVersion: string
+  /** false = aceptó una versión anterior (o ninguna): hay que pedirle que acepte la vigente. */
+  termsAccepted: boolean
 }
 
 type AuthState = {

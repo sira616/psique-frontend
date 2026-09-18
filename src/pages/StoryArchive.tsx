@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { activeRestriction } from '@/api/policy'
 import { fetchStory } from '@/api/stories'
 import { formatBookDate } from '@/features/book/format'
+import { StoryAppeal } from '@/features/incidents/StoryAppeal'
 import { StoryClosedNotice } from '@/features/policy/PolicyNotice'
 import { StoryStatus } from '@/features/story/StoryStatus'
 import { StoryTranscript } from '@/features/story/StoryTranscript'
@@ -68,6 +69,7 @@ export function StoryArchivePage() {
       </header>
 
       {closed ? <StoryClosedNotice restrictedUntil={restrictedUntil} /> : null}
+      {closed ? <StoryAppeal storyId={data.id} /> : null}
       {closed && isDev ? (
         <Suspense fallback={null}>
           <DevReopenButton storyId={data.id} onReopened={() => navigate(routes.story(data.id))} />

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Wordmark } from '@/shared/layout/Wordmark'
 import { ThemeToggle } from '@/shared/layout/ThemeToggle'
+import { LegalFooter } from '@/features/legal/LegalLinks'
 
 /** Envoltorio común a login y registro: mismo fondo, marca y ThemeToggle. */
 export function AuthShell({ children }: { children: ReactNode }) {
@@ -48,6 +49,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           {children}
         </div>
       </div>
+      <LegalFooter className="relative z-[1] pb-4" />
     </div>
   )
 }

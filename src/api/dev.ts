@@ -1,4 +1,5 @@
 import type { Wallet } from '@/api/economy'
+import type { AppealStatus, IncidentLevel } from '@/api/incidents'
 import { apiClient } from '@/shared/lib/apiClient'
 import type { PhaseId, StateEventData, Story } from '@/shared/lib/events'
 import type { AuthUser } from '@/stores/authStore'
@@ -49,4 +50,48 @@ export function grantObolos(amount: number) {
 
 export function liftRestriction() {
   return apiClient<AuthUser>('/api/dev/me/lift-restriction', { method: 'POST' })
+}
+
+// Moderación: cola de incidentes de todas las cuentas.
+
+export type ModerationFilter = 'pendientes' | 'sin_resolver' | 'recientes' | 'resueltos' | 'todos'
+
+export type DevIncident = {
+  id: number
+  createdAt: string
+  level: IncidentLevel | string
+  rule: string | null
+  user: { id: string; handle: string; username: string; restrictedUntil: string | null } | null
+  story: { id: string; characterId: string; bookTitle: string; status: string } | null
+  appealStatus: AppealStatus | null
+  appealText: string | null
+  appealedAt: string | null
+  review: { status: 'aceptada' | 'rechazada'; reviewedAt: string; reviewedBy: string | null; note: string | null } | null
+  hasExcerpt: boolean
+  /** Solo en el detalle. */
+  excerpt: string | null
+  canReview: boolean
+}
+
+export type IncidentQuery = { filter: ModerationFilter; level: string; rule: string; limit: number; offset: number }
+
+export const REVIEW_NOTE_MAX = 300
+
+export function fetchIncidentQueue({ filter, level, rule, limit, offset }: IncidentQuery) {
+  const params = new URLSearchParams({ filter, limit: String(limit), offset: String(offset) })
+  if (level) params.set('level', level)
+  if (rule.trim()) params.set('rule', rule.trim())
+  return apiClient<{ items: DevIncident[]; total: number }>(`/api/dev/incidents?${params}`)
+}
+
+export function fetchIncident(id: number) {
+  return apiClient<DevIncident>(`/api/dev/incidents/${id}`)
+}
+
+export function resolveIncident(id: number, decision: 'accept' | 'reject', note: string) {
+  const trimmed = note.trim()
+  return apiClient<{ incident: DevIncident; storyReopened: boolean }>(`/api/dev/incidents/${id}/${decision}`, {
+    method: 'POST',
+    body: trimmed ? { note: trimmed } : {},
+  })
 }

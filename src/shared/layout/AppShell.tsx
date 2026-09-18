@@ -4,6 +4,8 @@ import { LogOut, Menu, Settings, X } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { logout } from '@/api/auth'
 import { WalletBadge } from '@/features/economy/WalletBadge'
+import { LegalFooter } from '@/features/legal/LegalLinks'
+import { TermsGate } from '@/features/legal/TermsGate'
 import { fetchMyProfile, myProfileQueryKey } from '@/api/profile'
 import { ThemeToggle } from '@/shared/layout/ThemeToggle'
 import { Wordmark } from '@/shared/layout/Wordmark'
@@ -194,8 +196,12 @@ export function AppShell() {
           <div className={cn(pageContainerClassName, 'pt-lg pb-16 lg:pt-10')}>
             <Outlet />
           </div>
+          <footer className={cn(pageContainerClassName, 'border-t border-[color:var(--ps-line)] py-2')}>
+            <LegalFooter />
+          </footer>
         </main>
       )}
+      <TermsGate />
     </div>
   )
 }

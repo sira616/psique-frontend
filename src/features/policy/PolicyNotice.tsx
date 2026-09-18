@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { CircleSlash, Clock, Info } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { formatRestrictedUntil } from '@/api/policy'
+import { routes } from '@/router/paths'
 import { cn } from '@/shared/lib/utils'
 
 type NoticeProps = {
@@ -31,6 +33,15 @@ export function Notice({ icon, title, children, className, role = 'status' }: No
   )
 }
 
+/** A la lista de cierres que cuentan, donde se pueden apelar. */
+export function IncidentsLink() {
+  return (
+    <Link to={routes.incidentes} className="font-semibold text-accent-text underline">
+      Ver los cierres y apelar
+    </Link>
+  )
+}
+
 export function restrictionText(restrictedUntil: string) {
   return `Hasta el ${formatRestrictedUntil(restrictedUntil)} no puedes empezar ni continuar historias. Puedes seguir leyendo tus partidas y tu historial.`
 }
@@ -53,7 +64,8 @@ export function StoryClosedNotice({ detail, restrictedUntil, className, role, ch
       </span>
       {restrictedUntil ? (
         <span className="mt-1 block text-ink-dim">
-          <strong className="font-semibold text-ink">Tu cuenta queda restringida.</strong> {restrictionText(restrictedUntil)}
+          <strong className="font-semibold text-ink">Tu cuenta queda restringida.</strong> {restrictionText(restrictedUntil)}{' '}
+          <IncidentsLink />
         </span>
       ) : null}
       {children ? <span className="mt-1 block">{children}</span> : null}
@@ -72,7 +84,7 @@ export function RestrictionNotice({
 }) {
   return (
     <Notice icon={<Clock size={16} />} title="Tu cuenta tiene una restricción temporal." className={className} role={role}>
-      <span className="text-ink-dim">{restrictionText(restrictedUntil)}</span>
+      <span className="text-ink-dim">{restrictionText(restrictedUntil)}</span> <IncidentsLink />
     </Notice>
   )
 }

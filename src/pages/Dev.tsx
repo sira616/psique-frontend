@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, Navigate } from 'react-router-dom'
 import { fetchStories } from '@/api/stories'
 import { DevAccountPanel } from '@/features/dev/DevTools'
+import { DevSubnav } from '@/features/dev/DevSubnav'
 import { routes } from '@/router/paths'
 import { Card } from '@/shared/ui/card'
 import { useAuthStore } from '@/stores/authStore'
@@ -23,6 +24,8 @@ export default function DevPage() {
           Herramientas internas. Fase, afinidad, capítulos y contexto están en el panel Dev de cada historia.
         </p>
       </header>
+
+      <DevSubnav />
 
       <Card className="p-5">
         <h2 className="mb-3 font-serif text-headline-md text-ink">Tu cuenta</h2>

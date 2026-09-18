@@ -12,6 +12,7 @@ import {
 } from '@/api/profile'
 import { activeRestriction, formatRestrictedUntil, revokeAdult } from '@/api/policy'
 import { AccountDataSettings } from '@/features/account/AccountDataSettings'
+import { RestrictionIncidents } from '@/features/incidents/RestrictionIncidents'
 import { StoryField } from '@/features/customStories/StoryField'
 import { AdultConfirmDialog } from '@/features/policy/AdultConfirmDialog'
 import { ProfileImageField } from '@/features/profile/ProfileImageField'
@@ -422,6 +423,7 @@ export function SettingsPage() {
                 no puedes empezar ni continuar historias por incumplir las normas.
               </p>
             ) : null}
+            {restrictedUntil ? <RestrictionIncidents /> : null}
           </SettingsSection>
 
           <SettingsSection id="datos" title="Tus datos" description="Llévate una copia de todo lo que guardamos o borra la cuenta.">

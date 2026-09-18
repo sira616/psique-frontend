@@ -38,6 +38,7 @@ import {
 } from '@/mocks/fixtures'
 import { chunkText, createStorySseStream } from '@/mocks/sse'
 import { MONEDA } from '@/shared/economy/moneda'
+import { LEGAL_VERSION, MIN_AGE } from '@/content/legal/version'
 
 type MockUser = typeof DEMO_USER
 type MockStory = Story & { userId: string; updatedAt: string }
@@ -55,13 +56,14 @@ const stories = new Map<string, MockStory>()
 let refreshFailOnce = false
 
 // Política de contenido por cuenta. Todas arrancan sin confirmar y sin restricción.
-type AccountFlags = { adultConfirmed: boolean; restrictedUntil: string | null }
+// termsVersion: la última versión de términos aceptada (null = ninguna).
+type AccountFlags = { adultConfirmed: boolean; restrictedUntil: string | null; termsVersion: string | null }
 const accountFlags = new Map<string, AccountFlags>()
 
 function flagsOf(userId: string): AccountFlags {
   let flags = accountFlags.get(userId)
   if (!flags) {
-    flags = { adultConfirmed: false, restrictedUntil: null }
+    flags = { adultConfirmed: false, restrictedUntil: null, termsVersion: LEGAL_VERSION }
     accountFlags.set(userId, flags)
   }
   return flags
@@ -87,6 +89,8 @@ function authUserOut(user: MockUser) {
     isDev: DEV_USER_IDS.has(user.id),
     adultConfirmed: flagsOf(user.id).adultConfirmed,
     restrictedUntil: restrictionOf(user.id),
+    termsVersion: LEGAL_VERSION,
+    termsAccepted: flagsOf(user.id).termsVersion === LEGAL_VERSION,
   }
 }
 
@@ -735,7 +739,313 @@ function storyClosed(story: MockStory, restrictedUntil: string | null, detail = 
   )
 }
 
+// Términos e incidentes de conducta
+
+type MockIncidentReview = { status: 'aceptada' | 'rechazada'; reviewedAt: string; reviewedBy: string | null; note: string | null }
+type MockIncident = {
+  id: number
+  userId: string
+  storyId: string
+  /** Partida ficticia de otra cuenta (no está en el store): sus datos van fijos aquí. */
+  fakeStory: { characterId: string; bookTitle: string; status: string } | null
+  createdAt: string
+  level: string
+  rule: string | null
+  appealText: string | null
+  appealedAt: string | null
+  review: MockIncidentReview | null
+  excerpt: string | null
+}
+
+const EXCERPT_SAMPLE = '[Extracto simulado del mock: aquí iría el mensaje que cerró la partida, recortado a 300 caracteres.]'
+let incidentSeq = 0
+let incidents: MockIncident[] | null = null
+
+/**
+ * Incidentes sembrados: el de la partida cerrada de la demo (sin apelar), uno apelado de Lucía,
+ * uno propio de la cuenta dev (no lo puede revisar ella) y uno ya resuelto de Nora.
+ */
+function incidentStore(): MockIncident[] {
+  if (!incidents) {
+    const titleOf = (id: string) => mockCharacters.find((c) => c.id === id)?.title ?? id
+    incidents = [
+      {
+        id: 1,
+        userId: DEMO_USER.id,
+        storyId: CLOSED_DEMO_STORY_ID,
+        fakeStory: null,
+        createdAt: '2026-09-14T23:40:00',
+        level: 'explicito',
+        rule: 'llm:explicito',
+        appealText: null,
+        appealedAt: null,
+        review: null,
+        excerpt: EXCERPT_SAMPLE,
+      },
+      {
+        id: 2,
+        userId: 'user-lucia',
+        storyId: 'story-lucia-cerrada',
+        fakeStory: { characterId: 'mateo', bookTitle: titleOf('mateo'), status: 'cerrada' },
+        createdAt: '2026-09-16T19:05:00',
+        level: 'prohibido',
+        rule: 'patron:menores',
+        appealText: 'Hablaba de cuando los dos éramos pequeños y nos conocimos en el colegio. No había nada más.',
+        appealedAt: '2026-09-16T20:00:00',
+        review: null,
+        excerpt: EXCERPT_SAMPLE,
+      },
+      {
+        id: 3,
+        userId: DEV_USER.id,
+        storyId: 'story-dev-cerrada',
+        fakeStory: { characterId: 'lucia', bookTitle: titleOf('lucia'), status: 'cerrada' },
+        createdAt: '2026-09-17T10:00:00',
+        level: 'explicito',
+        rule: 'patron:explicito',
+        appealText: 'Probando la cola desde la cuenta dev.',
+        appealedAt: '2026-09-17T10:30:00',
+        review: null,
+        excerpt: EXCERPT_SAMPLE,
+      },
+      {
+        id: 4,
+        userId: 'user-nora',
+        storyId: 'story-nora-cerrada',
+        fakeStory: { characterId: 'mateo', bookTitle: titleOf('mateo'), status: 'activa' },
+        createdAt: '2026-09-01T18:00:00',
+        level: 'explicito',
+        rule: 'llm:explicito',
+        appealText: null,
+        appealedAt: '2026-09-01T19:00:00',
+        review: { status: 'aceptada', reviewedAt: '2026-09-02T09:00:00', reviewedBy: DEV_USER.handle, note: 'Falso positivo del filtro.' },
+        excerpt: null,
+      },
+    ]
+    incidentSeq = incidents.length
+  }
+  return incidents
+}
+
+function recordIncident(story: MockStory, level: string, text: string) {
+  incidentStore().unshift({
+    id: ++incidentSeq,
+    userId: story.userId,
+    storyId: story.id,
+    fakeStory: null,
+    createdAt: nowIso(),
+    level,
+    rule: 'mock:palabra-clave',
+    appealText: null,
+    appealedAt: null,
+    review: null,
+    excerpt: text.slice(0, 300),
+  })
+}
+
+function bookTitleOf(characterId: string) {
+  return mockCharacters.find((c) => c.id === characterId)?.title ?? findCustomStory(characterId)?.story.title ?? 'Libro borrado'
+}
+
+function incidentStory(incident: MockIncident) {
+  if (incident.fakeStory) return { id: incident.storyId, ...incident.fakeStory }
+  const story = storyStore().get(incident.storyId)
+  return story ? { id: story.id, characterId: story.characterId, bookTitle: bookTitleOf(story.characterId), status: story.status } : null
+}
+
+function appealStatusOf(incident: MockIncident) {
+  return incident.review?.status ?? (incident.appealedAt ? 'pendiente' : null)
+}
+
+function myIncidentOut(incident: MockIncident) {
+  return {
+    id: incident.id,
+    storyId: incident.storyId,
+    bookTitle: incidentStory(incident)?.bookTitle ?? 'Libro borrado',
+    level: incident.level,
+    createdAt: incident.createdAt,
+    appealStatus: appealStatusOf(incident),
+    appealText: incident.appealText,
+    appealedAt: incident.appealedAt,
+    reviewedAt: incident.review?.reviewedAt ?? null,
+    reviewNote: incident.review?.note ?? null,
+    counts: incident.review?.status !== 'aceptada',
+  }
+}
+
+function devIncidentOut(incident: MockIncident, viewer: MockUser, detail: boolean) {
+  const owner = [...users.values()].find((u) => u.id === incident.userId) ?? null
+  return {
+    id: incident.id,
+    createdAt: incident.createdAt,
+    level: incident.level,
+    rule: incident.rule,
+    user: owner
+      ? { id: owner.id, handle: profileOf(owner).handle, username: owner.username, restrictedUntil: restrictionOf(owner.id) }
+      : null,
+    story: incidentStory(incident),
+    appealStatus: appealStatusOf(incident),
+    appealText: incident.appealText,
+    appealedAt: incident.appealedAt,
+    review: incident.review,
+    hasExcerpt: incident.excerpt !== null,
+    excerpt: detail ? incident.excerpt : null,
+    canReview: incident.review === null && incident.userId !== viewer.id,
+  }
+}
+
+const APPEAL_REJECTED_TEXT =
+  'No podemos enviar la apelación con ese texto. Cuéntanos qué pasó sin contenido explícito y la revisaremos igual.'
+
+/** Como en el backend: con menos de 3 cierres que cuentan en 30 días, sin restricción. */
+function recomputeRestriction(userId: string) {
+  const since = Date.now() - 30 * 86_400_000
+  const counting = incidentStore().filter(
+    (i) => i.userId === userId && i.review?.status !== 'aceptada' && Date.parse(`${i.createdAt}Z`) >= since,
+  )
+  if (counting.length < 3) flagsOf(userId).restrictedUntil = null
+}
+
+/** No reabre si ya no está cerrada o si hay otra partida activa del mismo libro. */
+function reopenAfterReview(incident: MockIncident) {
+  if (incident.fakeStory) {
+    if (incident.fakeStory.status !== 'cerrada') return false
+    incident.fakeStory.status = 'activa'
+    return true
+  }
+  const story = storyStore().get(incident.storyId)
+  if (!story || story.status !== 'cerrada') return false
+  if (userStoriesFor(story.userId, story.characterId).some((s) => s.status === 'activa')) return false
+  Object.assign(story, {
+    status: 'activa',
+    closedAt: null,
+    closedReason: null,
+    state: stateFor(story.state.phaseIndex, story.state.affinity, story.state.turnCount),
+    updatedAt: nowIso(),
+  })
+  return true
+}
+
+const incidentHandlers = [
+  http.post('/api/me/accept-terms', async ({ request }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    const body = (await request.json().catch(() => null)) as { version?: string; confirm?: unknown } | null
+    if (body?.confirm !== true) return fieldError(422, 'confirm', 'literal_error', 'Input should be True')
+    if (body.version !== LEGAL_VERSION) {
+      return HttpResponse.json(
+        {
+          detail: 'Los términos han cambiado mientras los leías. Recarga para ver la versión vigente.',
+          code: 'terms_outdated',
+          termsVersion: LEGAL_VERSION,
+        },
+        { status: 409 },
+      )
+    }
+    flagsOf(user.id).termsVersion = LEGAL_VERSION
+    return HttpResponse.json(authUserOut(user))
+  }),
+
+  http.get('/api/me/incidents', ({ request }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    const own = incidentStore()
+      .filter((i) => i.userId === user.id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id - a.id)
+    return HttpResponse.json(own.map(myIncidentOut))
+  }),
+
+  http.post('/api/me/incidents/:id/appeal', async ({ request, params }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    const incident = incidentStore().find((i) => i.id === Number(params.id) && i.userId === user.id)
+    if (!incident) return HttpResponse.json({ detail: 'Ese incidente no existe.', code: 'not_found' }, { status: 404 })
+    const body = (await request.json().catch(() => null)) as { text?: string | null } | null
+    const text = (body?.text ?? '').trim()
+    if (text.length > 500) return fieldError(422, 'text', 'string_too_long', 'String should have at most 500 characters')
+    // Mismo filtro de entrada que el resto del mock: sirve para probar el 422 amable.
+    if (text && (SEXUAL_PATTERN.test(text) || MINORS_PATTERN.test(text))) {
+      return HttpResponse.json({ detail: APPEAL_REJECTED_TEXT, code: 'appeal_text_rejected' }, { status: 422 })
+    }
+    if (incident.review) {
+      return HttpResponse.json({ detail: 'Este incidente ya está revisado.', code: 'already_resolved' }, { status: 409 })
+    }
+    if (incident.appealedAt) {
+      return HttpResponse.json({ detail: 'Ya apelaste este incidente.', code: 'already_appealed' }, { status: 409 })
+    }
+    incident.appealedAt = nowIso()
+    incident.appealText = text || null
+    return HttpResponse.json(myIncidentOut(incident))
+  }),
+
+  http.get('/api/dev/incidents', ({ request }) => {
+    const { user, error } = devOnly(request)
+    if (!user) return error
+    const url = new URL(request.url)
+    const filter = url.searchParams.get('filter') ?? 'pendientes'
+    const level = url.searchParams.get('level')
+    const rule = url.searchParams.get('rule')
+    const limit = Math.min(200, Number(url.searchParams.get('limit') ?? 50) || 50)
+    const offset = Number(url.searchParams.get('offset') ?? 0) || 0
+    const since = Date.now() - 30 * 86_400_000
+    const list = incidentStore().filter((i) => {
+      if (filter === 'pendientes' && (!i.appealedAt || i.review)) return false
+      if (filter === 'sin_resolver' && i.review) return false
+      if (filter === 'recientes' && Date.parse(`${i.createdAt}Z`) < since) return false
+      if (filter === 'resueltos' && !i.review) return false
+      if (level && i.level !== level) return false
+      if (rule && !(i.rule ?? '').startsWith(rule)) return false
+      return true
+    })
+    // Las apeladas, la que más espera arriba; el resto, de la más reciente a la más antigua.
+    list.sort((a, b) =>
+      filter === 'pendientes'
+        ? a.appealedAt!.localeCompare(b.appealedAt!) || a.id - b.id
+        : b.createdAt.localeCompare(a.createdAt) || b.id - a.id,
+    )
+    return HttpResponse.json({
+      items: list.slice(offset, offset + limit).map((i) => devIncidentOut(i, user, false)),
+      total: list.length,
+    })
+  }),
+
+  http.get('/api/dev/incidents/:id', ({ request, params }) => {
+    const { user, error } = devOnly(request)
+    if (!user) return error
+    const incident = incidentStore().find((i) => i.id === Number(params.id))
+    if (!incident) return HttpResponse.json({ detail: 'Ese incidente no existe.' }, { status: 404 })
+    return HttpResponse.json(devIncidentOut(incident, user, true))
+  }),
+
+  http.post('/api/dev/incidents/:id/:decision', async ({ request, params }) => {
+    const { user, error } = devOnly(request)
+    if (!user) return error
+    const decision = String(params.decision)
+    if (decision !== 'accept' && decision !== 'reject') return HttpResponse.json({ detail: 'Not Found' }, { status: 404 })
+    const incident = incidentStore().find((i) => i.id === Number(params.id))
+    if (!incident) return HttpResponse.json({ detail: 'Ese incidente no existe.', code: 'not_found' }, { status: 404 })
+    if (incident.userId === user.id) {
+      return HttpResponse.json({ detail: 'No puedes revisar un incidente tuyo.', code: 'own_incident' }, { status: 403 })
+    }
+    if (incident.review) {
+      return HttpResponse.json({ detail: 'Este incidente ya está revisado.', code: 'already_resolved' }, { status: 409 })
+    }
+    const body = (await request.json().catch(() => null)) as { note?: string | null } | null
+    const note = (body?.note ?? '').trim()
+    if (note.length > 300) return fieldError(422, 'note', 'string_too_long', 'String should have at most 300 characters')
+    const accept = decision === 'accept'
+    incident.review = { status: accept ? 'aceptada' : 'rechazada', reviewedAt: nowIso(), reviewedBy: profileOf(user).handle, note: note || null }
+    // Resuelto: el extracto ya no hace falta.
+    incident.excerpt = null
+    const storyReopened = accept ? reopenAfterReview(incident) : false
+    if (accept) recomputeRestriction(incident.userId)
+    return HttpResponse.json({ incident: devIncidentOut(incident, user, true), storyReopened })
+  }),
+]
+
 export const handlers = [
+  ...incidentHandlers,
+
   http.post('/api/auth/login', async ({ request }) => {
     const body = (await request.json()) as { login?: string; password?: string }
     const user = users.get((body.login ?? '').trim().toLowerCase())
@@ -747,7 +1057,19 @@ export const handlers = [
   }),
 
   http.post('/api/auth/register', async ({ request }) => {
-    const body = (await request.json()) as { username?: string; password?: string; display_name?: string }
+    const body = (await request.json()) as {
+      username?: string
+      password?: string
+      display_name?: string
+      accept_terms?: boolean
+      min_age_confirmed?: boolean
+    }
+    if (body.accept_terms !== true || body.min_age_confirmed !== true) {
+      return HttpResponse.json(
+        { detail: `Para crear la cuenta tienes que aceptar los términos y la política de privacidad y confirmar que tienes al menos ${MIN_AGE} años.` },
+        { status: 422 },
+      )
+    }
     const username = (body.username ?? '').trim().toLowerCase()
     if (!/^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$/.test(username)) {
       return HttpResponse.json({ detail: 'Nombre de usuario no válido.' }, { status: 422 })
@@ -1335,6 +1657,7 @@ export const handlers = [
     const lower = userText.toLowerCase()
     if (lower.includes(POLICY_KEYWORDS.closeAndRestrict) || lower.includes(POLICY_KEYWORDS.close)) {
       closeStory(story)
+      recordIncident(story, lower.includes(POLICY_KEYWORDS.closeAndRestrict) ? 'prohibido' : 'explicito', userText)
       const until = lower.includes(POLICY_KEYWORDS.closeAndRestrict) ? restrictFor(user.id, 7) : null
       return storyClosed(story, until, POLICY_MESSAGES.closed)
     }
@@ -1677,6 +2000,8 @@ export function __resetCustomStories() {
   scratchCards.clear()
   reviews = null
   accountFlags.clear()
+  incidents = null
+  incidentSeq = 0
   for (const [id, story] of stories) if (story.userId === DEMO_USER.id) stories.delete(id)
   demoSeeded = false
 }
@@ -1693,6 +2018,16 @@ export function __resetMockState() {
   refreshFailOnce = false
   scratchCardSeq = 0
   reviewSeq = 0
+}
+
+/** Para tests: restringe la cuenta durante unos días, como tras tres cierres. */
+export function __restrictAccount(userId: string, days: number) {
+  return restrictFor(userId, days)
+}
+
+/** Para tests: la cuenta aceptó una versión anterior de los términos (o la vigente, con true). */
+export function __setTermsAccepted(userId: string, accepted: boolean) {
+  flagsOf(userId).termsVersion = accepted ? LEGAL_VERSION : '2020-01-01'
 }
 
 /** Para tests: el siguiente refresh falla una vez. */

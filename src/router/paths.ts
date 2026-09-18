@@ -1,6 +1,8 @@
 export const routes = {
   login: '/login',
   registro: '/registro',
+  terminos: '/terminos',
+  privacidad: '/privacidad',
   characters: '/',
   nuevaHistoria: '/historias/nueva',
   story: (storyId: string) => `/historia/${encodeURIComponent(storyId)}`,
@@ -9,7 +11,10 @@ export const routes = {
   explorar: '/explorar',
   profile: (handle: string) => `/u/${encodeURIComponent(handle)}`,
   configuracion: '/configuracion',
+  /** Donde se listan los incidentes que cuentan para la restricción, con su apelación. */
+  incidentes: '/configuracion#incidentes',
   rascaYGana: '/rasca-y-gana',
   dev: '/dev',
+  moderacion: '/dev/moderacion',
   notFound: '*',
 } as const

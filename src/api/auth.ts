@@ -21,10 +21,23 @@ export async function login(username: string, password: string) {
 }
 
 /** El backend devuelve ya la sesión al registrarse: no hay que volver a entrar. */
-export async function register(username: string, password: string, displayName?: string) {
+export type RegisterConsent = { acceptTerms: boolean; minAgeConfirmed: boolean }
+
+export async function register(
+  username: string,
+  password: string,
+  displayName: string | undefined,
+  consent: RegisterConsent,
+) {
   const data = await apiClient<SessionResponse>('/api/auth/register', {
     method: 'POST',
-    body: { username, password, display_name: displayName || null },
+    body: {
+      username,
+      password,
+      display_name: displayName || null,
+      accept_terms: consent.acceptTerms,
+      min_age_confirmed: consent.minAgeConfirmed,
+    },
     skipAuthRefresh: true,
   })
   return storeSession(data)

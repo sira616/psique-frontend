@@ -20,6 +20,9 @@ const SettingsPage = lazy(() => import('@/pages/Settings').then((m) => ({ defaul
 const ScratchGamePage = lazy(() => import('@/pages/ScratchGame').then((m) => ({ default: m.ScratchGamePage })))
 // Solo para cuentas dev.
 const DevPage = lazy(() => import('@/pages/Dev'))
+const DevModerationPage = lazy(() => import('@/pages/DevModeration'))
+// Públicas: se leen sin sesión (enlazadas desde el registro).
+const LegalPage = lazy(() => import('@/pages/Legal'))
 
 /**
  * Suspense por ruta y no uno global: dentro del AppShell la cabecera y la navegación siguen
@@ -44,6 +47,8 @@ export function AppRoutes() {
     <Routes>
       <Route path={routes.login} element={<LoginPage />} />
       <Route path={routes.registro} element={page(<RegisterPage />)} />
+      <Route path={routes.terminos} element={page(<LegalPage kind="terminos" />)} />
+      <Route path={routes.privacidad} element={page(<LegalPage kind="privacidad" />)} />
 
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
@@ -57,6 +62,7 @@ export function AppRoutes() {
           <Route path={routes.configuracion} element={page(<SettingsPage />)} />
           <Route path={routes.rascaYGana} element={page(<ScratchGamePage />)} />
           <Route path={routes.dev} element={page(<DevPage />)} />
+          <Route path={routes.moderacion} element={page(<DevModerationPage />)} />
         </Route>
       </Route>
 
