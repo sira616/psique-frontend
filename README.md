@@ -1,6 +1,6 @@
 # Psique — frontend
 
-[![CI](https://github.com/sira616/psique-frontend/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/sira616/psique-frontend/actions/workflows/ci.yml)
+[![CI](https://github.com/sira616/psique-frontend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sira616/psique-frontend/actions/workflows/ci.yml)
 
 Vite + React 19 + TypeScript + Tailwind 4. Chat de historias románticas con streaming,
 indicador de fase y afinidad y sugerencias de acción.
@@ -25,7 +25,7 @@ npm run build      # tsc -b + vite build
 npm run e2e        # Playwright + axe contra la API simulada (puerto 5195, solo Chromium)
 ```
 
-La primera vez, para el e2e: `npx playwright install chromium`. En cada push y PR a `master`,
+La primera vez, para el e2e: `npx playwright install chromium`. En cada push y PR a `main`,
 GitHub Actions (`.github/workflows/ci.yml`) pasa typecheck, vitest, build y el e2e.
 
 ## Estructura
