@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { Archive, CircleSlash, EyeOff } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { bookHistoryQueryKey, fetchBookHistory } from '@/api/books'
 import { formatBookDate } from '@/features/book/format'
 import { routes } from '@/router/paths'
 import { Card } from '@/shared/ui/card'
+import { Icon, IconLecturasAnteriores, IconPartidaCerrada, IconSoloTuLoVes } from '@/shared/ui/icons'
 
 /** Lecturas archivadas y cerradas del usuario actual. El backend solo devuelve las suyas. */
 export function ReadingHistory({ bookId }: { bookId: string }) {
@@ -17,11 +17,11 @@ export function ReadingHistory({ bookId }: { bookId: string }) {
       <section aria-labelledby="historial-titulo" className="space-y-3">
         <div>
           <h2 id="historial-titulo" className="flex items-center gap-2 font-serif text-headline-md text-ink">
-            <Archive size={18} className="text-accent-text" aria-hidden />
+            <Icon icon={IconLecturasAnteriores} size={18} className="text-accent-text" />
             Tus lecturas anteriores
           </h2>
           <p className="mt-1 flex items-center gap-1.5 text-[13px] text-ink-faint">
-            <EyeOff size={13} aria-hidden />
+            <Icon icon={IconSoloTuLoVes} size={13} />
             Solo tú ves este historial.
           </p>
         </div>
@@ -38,7 +38,7 @@ export function ReadingHistory({ bookId }: { bookId: string }) {
                 </p>
                 {closed ? (
                   <p className="flex items-center gap-1.5 text-body-sm font-semibold text-ink-dim">
-                    <CircleSlash size={14} aria-hidden className="text-gold" />
+                    <Icon icon={IconPartidaCerrada} size={14} className="text-gold" />
                     Cerrada por incumplir las normas
                   </p>
                 ) : null}

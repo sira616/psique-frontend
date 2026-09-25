@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { Send } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
+import { Icon, IconEnviar } from '@/shared/ui/icons'
 
 const MAX_LEN = 2000
 
@@ -74,7 +74,7 @@ export function ChatComposer({
           boxShadow: 'var(--ps-shadow-glow)',
         }}
       >
-        <Send size={18} aria-hidden />
+        <Icon icon={IconEnviar} size={18} />
       </button>
     </form>
   )

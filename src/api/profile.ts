@@ -26,6 +26,8 @@ export type ReadingItem = {
   mode: CustomStoryMode | null
   title: string
   characterName: string | null
+  /** Portada de la historia; null en los libros de Psique y en las propias sin portada. */
+  coverUrl: string | null
   progress: { phase: PhaseId; phaseLabel: string; phaseIndex: number; phaseCount: number }
   updatedAt: string | null
 }

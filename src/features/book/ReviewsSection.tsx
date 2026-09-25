@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { MessageSquareText } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import {
   bookQueryKey,
   bookReviewsQueryKey,
@@ -13,43 +12,12 @@ import {
   type BookOut,
   type ReviewOut,
 } from '@/api/books'
-import { formatBookDate, reviewsLabel } from '@/features/book/format'
+import { reviewsLabel } from '@/features/book/format'
+import { ReviewItem } from '@/features/book/ReviewItem'
 import { StarRating, StarsDisplay } from '@/features/book/StarRating'
-import { routes } from '@/router/paths'
 import { ApiError } from '@/shared/lib/apiClient'
-import { Avatar } from '@/shared/ui/Avatar'
-import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
-
-function ReviewItem({ review }: { review: ReviewOut }) {
-  const edited = review.updatedAt && review.createdAt && review.updatedAt !== review.createdAt
-  return (
-    <article className="space-y-2">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Link
-          to={routes.profile(review.author.handle)}
-          className="-mx-1 inline-flex min-h-touch items-center gap-2 rounded-xl px-1 hover:bg-surf-2"
-        >
-          <Avatar name={review.author.displayName} url={review.author.avatarUrl} />
-          <span className="leading-tight">
-            <span className="block text-body-sm font-semibold text-ink">{review.author.displayName}</span>
-            <span className="block text-[13px] text-ink-dim">@{review.author.handle}</span>
-          </span>
-        </Link>
-        <StarsDisplay value={review.rating} />
-        {review.isMine ? <Badge variant="outline">Tuya</Badge> : null}
-      </div>
-      {review.text ? <p className="max-w-[65ch] whitespace-pre-line break-words text-ink">{review.text}</p> : null}
-      {review.createdAt ? (
-        <p className="text-[13px] text-ink-faint">
-          {formatBookDate(review.createdAt)}
-          {edited ? ' · editada' : ''}
-        </p>
-      ) : null}
-    </article>
-  )
-}
 
 type ReviewFormProps = {
   bookId: string

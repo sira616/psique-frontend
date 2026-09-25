@@ -6,12 +6,19 @@
  */
 import { delay, http, HttpResponse } from 'msw'
 import type { BookCard, BookOut, HistoryItem, ReviewOut } from '@/api/books'
-import type { CreateCustomStory, CustomStory } from '@/api/customStories'
+import type { CreateCustomStory, CustomStory, CustomStoryStats } from '@/api/customStories'
 import type { MovementReason, Wallet } from '@/api/economy'
 import type { StoryCard } from '@/api/explore'
 import type { MyProfile, PublicProfile, ReadingItem } from '@/api/profile'
 import { HANDLE_PATTERN, linkProblem, normalizeDisplayName, PROFILE_LIMITS } from '@/features/profile/limits'
-import { validateConcepto, validateDefinida, type FieldErrors } from '@/features/customStories/limits'
+import {
+  AGE_MAX,
+  AGE_MIN,
+  NAME_PATTERN,
+  validateConcepto,
+  validateDefinida,
+  type FieldErrors,
+} from '@/features/customStories/limits'
 import type { Character, PhaseId, Story, StorySummary, StoryStreamEvent } from '@/shared/lib/events'
 import {
   CONTENT_MESSAGES,
@@ -184,6 +191,7 @@ function toCard(story: CustomStory, ownerId: string, viewerId: string): StoryCar
     tone: story.tone,
     // En concepto nunca sale nada que haya inventado el LLM.
     definition: story.mode === 'definida' ? story.definition : null,
+    coverUrl: story.coverUrl,
     author: authorOf(ownerId),
     isMine: ownerId === viewerId,
     adult: story.adult,
@@ -219,6 +227,7 @@ function readingOf(userId: string): ReadingItem[] {
         mode: custom?.story.mode ?? null,
         title: custom?.story.title ?? s.characterName,
         characterName: custom?.story.mode === 'concepto' ? null : s.characterName,
+        coverUrl: custom?.story.coverUrl ?? null,
         progress: {
           phase: s.state.phase,
           phaseLabel: s.state.phaseLabel,
@@ -279,6 +288,88 @@ function schemaErrors(mode: string, errors: FieldErrors) {
     { status: 422 },
   )
 }
+
+// --- Edición y portada de las historias propias
+
+type PatchTextRule = { min?: number; max: number; nullable?: boolean; label: string }
+
+/** Mismos límites y mensajes que el backend, con `loc: ["body", "<campo>"]` (sin anidar el modo). */
+const PATCH_TEXT_RULES: Record<string, PatchTextRule> = {
+  title: { min: 3, max: 80, label: 'El título' },
+  hook: { min: 10, max: 140, label: 'El gancho' },
+  description: { max: 1000, nullable: true, label: 'La descripción' },
+  tone: { min: 3, max: 60, nullable: true, label: 'El tono' },
+  name: { min: 2, max: 60, label: 'El nombre' },
+  personality: { min: 3, max: 300, label: 'La personalidad' },
+  speakingStyle: { min: 10, max: 300, label: 'La forma de hablar' },
+  setting: { min: 20, max: 590, label: 'El escenario inicial' },
+  backstory: { min: 40, max: 1200, label: 'El pasado del personaje' },
+}
+
+/** Solo se pueden tocar en modo definida: en concepto el personaje lo inventa el LLM. */
+const PATCH_CHARACTER_FIELDS = ['name', 'age', 'personality', 'speakingStyle', 'setting', 'backstory']
+const PATCH_BOOL_FIELDS = ['isPublic', 'freeFirstRead', 'adult']
+const PATCH_FIELDS = new Set([...Object.keys(PATCH_TEXT_RULES), ...PATCH_BOOL_FIELDS, 'age'])
+/** `premise` no se edita nunca: por eso cae en extra_forbidden como cualquier campo inventado. */
+
+type PatchError = { type: string; loc: string[]; msg: string }
+
+function patchErrors(errors: PatchError[]) {
+  return HttpResponse.json({ detail: errors }, { status: 422 })
+}
+
+/** Lista de errores por campo del PATCH. Vacía = todo bien. */
+function validatePatch(body: Record<string, unknown>, mode: string): PatchError[] {
+  const errors: PatchError[] = []
+  const add = (field: string, type: string, msg: string) => errors.push({ type, loc: ['body', field], msg })
+
+  for (const [field, rule] of Object.entries(PATCH_TEXT_RULES)) {
+    if (!(field in body)) continue
+    if (mode === 'concepto' && PATCH_CHARACTER_FIELDS.includes(field)) continue
+    const raw = body[field]
+    if (raw === null) {
+      if (!rule.nullable) add(field, 'string_type', 'Input should be a valid string')
+      continue
+    }
+    if (typeof raw !== 'string') {
+      add(field, 'string_type', 'Input should be a valid string')
+      continue
+    }
+    const value = raw.trim()
+    if (!value) {
+      // Vaciar borra los campos opcionales; en los demás es un valor que falta.
+      if (!rule.nullable) add(field, 'too_short', `${rule.label} necesita al menos ${rule.min ?? 1} caracteres.`)
+      continue
+    }
+    if (rule.min && value.length < rule.min) {
+      add(field, 'too_short', `${rule.label} necesita al menos ${rule.min} caracteres.`)
+    } else if (value.length > rule.max) {
+      add(field, 'too_long', `${rule.label} admite como mucho ${rule.max} caracteres.`)
+    } else if (field === 'name' && !NAME_PATTERN.test(value)) {
+      add('name', 'name_format', 'Solo letras, espacios, apóstrofos, puntos y guiones.')
+    }
+  }
+
+  if ('age' in body && mode !== 'concepto') {
+    const age = Number(body.age)
+    if (!Number.isInteger(age) || age < AGE_MIN || age > AGE_MAX) {
+      add('age', 'age_range', `Los personajes tienen que ser adultos (entre ${AGE_MIN} y ${AGE_MAX} años).`)
+    }
+  }
+
+  for (const field of PATCH_BOOL_FIELDS) {
+    // `adult: null` = sin cambios, igual que en el backend.
+    if (field in body && typeof body[field] !== 'boolean' && !(field === 'adult' && body[field] === null)) {
+      add(field, 'bool_type', 'Input should be a valid boolean')
+    }
+  }
+  return errors
+}
+
+const COVER_MAX_BYTES = 4 * 1024 * 1024
+const COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+/** Ruta estable por historia: subir dos veces no deja basura en `uploadedMedia`. */
+const COVER_PATH = (storyId: string) => `/media/covers/mock-${storyId}.webp`
 
 // Filtro por patrones, como el del backend: el trasfondo de un adulto ("de niña") pasa.
 const SEXUAL_PATTERN = /\bsexo\b|sexual|expl[ií]cit/i
@@ -636,6 +727,8 @@ function bookOut(book: MockBook, viewerId: string): BookOut {
     hook: custom?.hook ?? book.character!.hook,
     characterName: custom ? (custom.definition?.name ?? null) : book.character!.name,
     tone: custom?.tone ?? null,
+    // Los libros de Psique no tienen portada propia.
+    coverUrl: custom?.coverUrl ?? null,
     author: book.ownerId ? authorOf(book.ownerId) : null,
     isMine,
     isPublic: custom?.isPublic ?? true,
@@ -716,6 +809,7 @@ function bookCard(book: MockBook): BookCard {
     title: custom?.title ?? book.character!.title,
     hook: custom?.hook ?? book.character!.hook,
     tone: custom?.tone ?? null,
+    coverUrl: custom?.coverUrl ?? null,
     author: book.ownerId ? authorOf(book.ownerId) : null,
     readers: readersOf(book.id),
     adult: isAdultBook(book),
@@ -1270,6 +1364,72 @@ export const handlers = [
     return HttpResponse.json([...mockCharacters, ...customStoriesOf(user.id).map(customToCharacter)])
   }),
 
+  http.post('/api/custom-stories/:id/cover', async ({ request, params }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    const story = customStoriesOf(user.id).find((s) => s.id === String(params.id))
+    if (!story) return HttpResponse.json({ detail: CONTENT_MESSAGES.notFound }, { status: 404 })
+    if (!request.headers.get('Content-Type')?.startsWith('multipart/form-data')) {
+      return fieldError(415, 'file', 'multipart_required', 'La imagen tiene que enviarse como multipart/form-data.')
+    }
+    const file = (await request.formData()).get('file')
+    if (!(file instanceof Blob) || file.size === 0) return fieldError(422, 'file', 'missing', 'Falta la imagen.')
+    if (file.size > COVER_MAX_BYTES) {
+      return fieldError(413, 'file', 'file_too_large', 'La imagen pesa demasiado: como mucho 4 MB.')
+    }
+    if (!COVER_TYPES.includes(file.type)) {
+      return fieldError(415, 'file', 'image_type', 'La imagen tiene que ser JPEG, PNG o WebP.')
+    }
+    // El backend re-codifica a WebP; aqui basta con guardar los bytes tal cual.
+    const path = COVER_PATH(story.id)
+    uploadedMedia.set(path, { bytes: await file.arrayBuffer(), type: file.type })
+    story.coverUrl = path
+    return HttpResponse.json(story)
+  }),
+
+  http.delete('/api/custom-stories/:id/cover', ({ request, params }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    const story = customStoriesOf(user.id).find((s) => s.id === String(params.id))
+    if (!story) return HttpResponse.json({ detail: CONTENT_MESSAGES.notFound }, { status: 404 })
+    // Idempotente: quitar una portada que ya no esta tambien responde 204.
+    if (story.coverUrl) uploadedMedia.delete(story.coverUrl)
+    story.coverUrl = null
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.get('/api/custom-stories/:id/stats', ({ request, params }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    const story = customStoriesOf(user.id).find((s) => s.id === String(params.id))
+    if (!story) return HttpResponse.json({ detail: CONTENT_MESSAGES.notFound }, { status: 404 })
+    const bookReviews = reviewStore().filter((r) => r.bookId === story.characterId)
+    const average = bookReviews.length
+      ? Math.round((bookReviews.reduce((sum, r) => sum + r.rating, 0) / bookReviews.length) * 10) / 10
+      : null
+    const out: CustomStoryStats = {
+      readers: readersOf(story.characterId),
+      activeStories: [...storyStore().values()].filter(
+        (s) => s.characterId === story.characterId && s.status === 'activa',
+      ).length,
+      ratingAverage: average,
+      reviewCount: bookReviews.length,
+      recentReviews: [...bookReviews]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 5)
+        .map((r) => reviewOut(r, user.id)),
+    }
+    return HttpResponse.json(out)
+  }),
+
+  http.get('/api/custom-stories/:id', ({ request, params }) => {
+    const user = bearerUser(request)
+    if (!user) return unauthorized()
+    const story = customStoriesOf(user.id).find((s) => s.id === String(params.id))
+    if (!story) return HttpResponse.json({ detail: CONTENT_MESSAGES.notFound }, { status: 404 })
+    return HttpResponse.json(story)
+  }),
+
   http.get('/api/custom-stories', ({ request }) => {
     const user = bearerUser(request)
     if (!user) return unauthorized()
@@ -1330,6 +1490,7 @@ export const handlers = [
         mode: 'definida',
         title: input.title.trim(),
         hook: input.hook?.trim() || (setting.split(/(?<=[.!?])\s/)[0] ?? setting).slice(0, 140),
+        description: null,
         premise: null,
         tone: input.tone.trim(),
         definition: {
@@ -1341,6 +1502,7 @@ export const handlers = [
           tone: input.tone.trim(),
           backstory: input.backstory.trim(),
         },
+        coverUrl: null,
         ...visibility,
         createdAt: nowIso(),
       }
@@ -1354,9 +1516,11 @@ export const handlers = [
         mode: 'concepto',
         title: premise.slice(0, 60),
         hook: `[demo] ${premise}`.slice(0, 140),
+        description: null,
         premise,
         tone: input.tone?.trim() || null,
         definition: null,
+        coverUrl: null,
         ...visibility,
         createdAt: nowIso(),
       }
@@ -1370,14 +1534,41 @@ export const handlers = [
     if (!user) return unauthorized()
     const body = (await request.json()) as Record<string, unknown>
     const keys = Object.keys(body)
-    const extra = keys.find((k) => k !== 'isPublic' && k !== 'freeFirstRead' && k !== 'adult')
+    // `extra="forbid"`: aquí cae tambien `premise`, que no es editable.
+    const extra = keys.find((k) => !PATCH_FIELDS.has(k))
     if (extra) return fieldError(422, extra, 'extra_forbidden', 'Extra inputs are not permitted')
-    if (!keys.length) return fieldError(422, 'isPublic', 'missing', 'Indica isPublic, freeFirstRead o adult.')
-    // `adult` admite null (= sin cambios), como en el backend.
-    const notBool = keys.find((k) => typeof body[k] !== 'boolean' && !(k === 'adult' && body[k] === null))
-    if (notBool) return fieldError(422, notBool, 'bool_type', 'Input should be a valid boolean')
+    if (!keys.length) return fieldError(422, 'title', 'missing', 'Indica al menos un campo que cambiar.')
     const story = customStoriesOf(user.id).find((s) => s.id === String(params.id))
     if (!story) return HttpResponse.json({ detail: CONTENT_MESSAGES.notFound }, { status: 404 })
+
+    // Campos de personaje en modo concepto: error general en texto, no por campo.
+    if (story.mode === 'concepto' && keys.some((k) => PATCH_CHARACTER_FIELDS.includes(k))) {
+      return HttpResponse.json(
+        { detail: 'En modo concepto el personaje lo inventa Psique: esos campos no se pueden editar.' },
+        { status: 422 },
+      )
+    }
+
+    const errors = validatePatch(body, story.mode)
+    if (errors.length) return patchErrors(errors)
+
+    const content = contentProblem(body)
+    if (content) return HttpResponse.json({ detail: content }, { status: 422 })
+
+    if (typeof body.title === 'string') story.title = body.title.trim()
+    if (typeof body.hook === 'string') story.hook = body.hook.trim()
+    // null o cadena vacia borran; cualquier otro texto sustituye.
+    if ('description' in body) story.description = asText(body.description).trim() || null
+    if ('tone' in body) {
+      story.tone = asText(body.tone).trim() || null
+      if (story.definition) story.definition.tone = story.tone ?? ''
+    }
+    if (story.definition) {
+      for (const field of ['name', 'personality', 'speakingStyle', 'setting', 'backstory'] as const) {
+        if (typeof body[field] === 'string') story.definition[field] = (body[field] as string).trim()
+      }
+      if ('age' in body) story.definition.age = Number(body.age)
+    }
     if (typeof body.isPublic === 'boolean') {
       if (body.isPublic && !story.isPublic) story.publishedAt = nowIso()
       story.isPublic = body.isPublic

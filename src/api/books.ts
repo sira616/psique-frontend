@@ -57,6 +57,8 @@ export type BookOut = {
   /** null en concepto: el personaje se descubre jugando. */
   characterName: string | null
   tone: string | null
+  /** Portada; siempre null en los libros de Psique. */
+  coverUrl: string | null
   /** null = Psique (predefinido). */
   author: BookAuthor | null
   isMine: boolean
@@ -91,6 +93,8 @@ export type BookCard = {
   title: string
   hook: string
   tone: string | null
+  /** Portada; siempre null en los libros de Psique. */
+  coverUrl: string | null
   author: BookAuthor | null
   readers: number
   adult: boolean

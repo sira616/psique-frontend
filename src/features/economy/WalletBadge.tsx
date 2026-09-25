@@ -1,9 +1,9 @@
-import { Coins } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useWallet } from '@/features/economy/useWallet'
 import { routes } from '@/router/paths'
 import { formatoMoneda } from '@/shared/economy/moneda'
 import { cn } from '@/shared/lib/utils'
+import { Icon, IconObolos } from '@/shared/ui/icons'
 
 /** Saldo en la cabecera. Lleva al minijuego, que es donde se consiguen. */
 export function WalletBadge() {
@@ -23,7 +23,7 @@ export function WalletBadge() {
         )
       }
     >
-      <Coins size={18} aria-hidden className="text-gold" />
+      <Icon icon={IconObolos} size={18} className="text-gold" />
       <span>{balance}</span>
     </NavLink>
   )

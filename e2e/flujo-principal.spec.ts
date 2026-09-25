@@ -44,7 +44,7 @@ test('login → libro → partida → capítulo bloqueado → rasca y gana → d
   })
 
   await test.step('capítulo bloqueado', async () => {
-    await page.getByRole('navigation', { name: 'Principal' }).getByRole('link', { name: 'Historias' }).click()
+    await page.getByRole('navigation', { name: 'Principal' }).getByRole('link', { name: 'Historias', exact: true }).click()
     await page.getByRole('link', { name: /^Mateo/ }).first().click()
     await expect(page).toHaveURL(/\/historia\/story-bloqueada$/)
     await expect(page.getByRole('textbox', { name: 'Mensaje' })).toBeDisabled()

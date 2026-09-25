@@ -13,6 +13,8 @@ const StoryPage = lazy(() => import('@/pages/Story').then((m) => ({ default: m.S
 const StoryArchivePage = lazy(() => import('@/pages/StoryArchive').then((m) => ({ default: m.StoryArchivePage })))
 const BookPage = lazy(() => import('@/pages/Book').then((m) => ({ default: m.BookPage })))
 const CreateStoryPage = lazy(() => import('@/pages/CreateStory').then((m) => ({ default: m.CreateStoryPage })))
+const MyStoriesPage = lazy(() => import('@/pages/MyStories').then((m) => ({ default: m.MyStoriesPage })))
+const MyStoryDetailPage = lazy(() => import('@/pages/MyStoryDetail').then((m) => ({ default: m.MyStoryDetailPage })))
 const NotFoundPage = lazy(() => import('@/pages/NotFound').then((m) => ({ default: m.NotFoundPage })))
 const ExplorePage = lazy(() => import('@/pages/Explore').then((m) => ({ default: m.ExplorePage })))
 const ProfilePage = lazy(() => import('@/pages/Profile').then((m) => ({ default: m.ProfilePage })))
@@ -54,6 +56,8 @@ export function AppRoutes() {
         <Route element={<AppShell />}>
           <Route path={routes.characters} element={page(<CharactersPage />)} />
           <Route path={routes.nuevaHistoria} element={page(<CreateStoryPage />)} />
+          <Route path={routes.misHistorias} element={page(<MyStoriesPage />)} />
+          <Route path="/mis-historias/:storyId" element={page(<MyStoryDetailPage />)} />
           <Route path="/historia/:storyId" element={page(<StoryPage />)} />
           <Route path="/historia/:storyId/archivo" element={page(<StoryArchivePage />)} />
           <Route path="/libro/:bookId" element={page(<BookPage />)} />

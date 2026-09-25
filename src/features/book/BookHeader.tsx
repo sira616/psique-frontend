@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { Feather, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { BookAuthor, BookOut } from '@/api/books'
+import type { CustomStoryMode } from '@/shared/lib/events'
+import { StoryCover } from '@/features/customStories/StoryCover'
 import { modeLabel } from '@/features/book/format'
 import { AdultBadge } from '@/features/policy/AdultBadge'
 import { routes } from '@/router/paths'
@@ -9,19 +11,32 @@ import { Avatar } from '@/shared/ui/Avatar'
 import { Badge } from '@/shared/ui/badge'
 import { Card } from '@/shared/ui/card'
 
-/** Portada de relleno: aún no hay portadas, así que se usa la inicial del título sobre la marca. */
-export function BookCover({ title, className = '' }: { title: string; className?: string }) {
+/**
+ * Portada del libro. Con imagen se enseña la imagen; sin ella, el degradado determinista que
+ * comparte con las tarjetas de "Mis historias", para que un libro se vea siempre igual.
+ */
+export function BookCover({
+  id,
+  title,
+  coverUrl,
+  mode,
+  className = '',
+}: {
+  id: string
+  title: string
+  coverUrl: string | null
+  mode?: CustomStoryMode | null
+  className?: string
+}) {
   return (
-    <div
-      aria-hidden
-      className={`grid place-items-center overflow-hidden rounded-2xl font-serif text-on-primary ${className}`}
-      style={{
-        background: 'linear-gradient(150deg, var(--ps-primary-deep), var(--ps-primary) 55%, var(--ps-gold))',
-        boxShadow: 'var(--ps-shadow-md), inset 0 1px 0 var(--ps-inset-shine)',
-      }}
-    >
-      <span className="text-[56px] leading-none opacity-90">{Array.from(title.trim())[0]?.toUpperCase() ?? '?'}</span>
-    </div>
+    <StoryCover
+      id={id}
+      title={title}
+      coverUrl={coverUrl}
+      mode={mode}
+      className={`rounded-2xl shadow-[var(--ps-shadow-md)] ${className}`}
+      initialClassName="text-[clamp(32px,22cqw,56px)]"
+    />
   )
 }
 
@@ -60,7 +75,13 @@ export function BookHeader({ book, actions }: { book: BookOut; actions: ReactNod
   return (
     <Card className="p-5 sm:p-6 lg:p-8">
       <div className="grid gap-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-6 lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-8">
-        <BookCover title={book.title} className="aspect-[3/4] w-28 sm:w-full" />
+        <BookCover
+          id={book.id}
+          title={book.title}
+          coverUrl={book.coverUrl}
+          mode={book.mode}
+          className="aspect-[3/4] w-28 sm:w-full"
+        />
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="outline" className={book.mode === 'concepto' ? 'gap-1 text-accent-text' : undefined}>

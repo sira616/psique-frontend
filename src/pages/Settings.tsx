@@ -28,6 +28,15 @@ import {
 import { routes } from '@/router/paths'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
+import {
+  Icon,
+  IconAdulto,
+  IconCuenta,
+  IconPerfil,
+  IconPrivacidad,
+  IconTusDatos,
+  type IconComponent,
+} from '@/shared/ui/icons'
 import { Switch } from '@/shared/ui/Switch'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -69,11 +78,24 @@ function focusFirstError(errors: FieldErrors) {
   if (first) document.getElementById(first)?.focus()
 }
 
-function SettingsSection({ id, title, description, children }: { id: string; title: string; description: string; children: ReactNode }) {
+function SettingsSection({
+  id,
+  title,
+  description,
+  icon,
+  children,
+}: {
+  id: string
+  title: string
+  description: string
+  icon: IconComponent
+  children: ReactNode
+}) {
   return (
     <section id={id} aria-labelledby={`${id}-titulo`} className="scroll-mt-6">
       <Card className="p-5 lg:p-8">
-        <h2 id={`${id}-titulo`} className="font-serif text-headline-lg text-ink">
+        <h2 id={`${id}-titulo`} className="flex items-center gap-2 font-serif text-headline-lg text-ink">
+          <Icon icon={icon} size={20} className="text-accent-text" />
           {title}
         </h2>
         <p className="mt-1 mb-6 text-body-sm text-ink-dim">{description}</p>
@@ -387,7 +409,12 @@ export function SettingsPage() {
 
           {profile.data ? (
             <>
-              <SettingsSection id="perfil" title="Perfil" description="Lo que aparece en tu página pública y junto a tus historias.">
+              <SettingsSection
+                id="perfil"
+                title="Perfil"
+                icon={IconPerfil}
+                description="Lo que aparece en tu página pública y junto a tus historias."
+              >
                 <div className="mb-8 grid gap-6 md:grid-cols-[auto_minmax(0,1fr)]">
                   <ProfileImageField kind="avatar" profile={profile.data} onChanged={onSaved} onAnnounce={announce} />
                   <ProfileImageField kind="banner" profile={profile.data} onChanged={onSaved} onAnnounce={announce} />
@@ -395,7 +422,12 @@ export function SettingsPage() {
                 <ProfileForm profile={profile.data} onSaved={onSaved} announce={announce} />
               </SettingsSection>
 
-              <SettingsSection id="privacidad" title="Privacidad" description="Decide qué estanterías de tu perfil pueden ver otras personas.">
+              <SettingsSection
+                id="privacidad"
+                title="Privacidad"
+                icon={IconPrivacidad}
+                description="Decide qué estanterías de tu perfil pueden ver otras personas."
+              >
                 <PrivacySettings profile={profile.data} onSaved={onSaved} announce={announce} />
               </SettingsSection>
             </>
@@ -404,12 +436,13 @@ export function SettingsPage() {
           <SettingsSection
             id="contenido"
             title="Contenido +18"
+            icon={IconAdulto}
             description="Confirma tu mayoría de edad para ver y leer historias marcadas como +18."
           >
             <AdultSettings announce={announce} />
           </SettingsSection>
 
-          <SettingsSection id="cuenta" title="Cuenta" description="Datos para entrar en Psique.">
+          <SettingsSection id="cuenta" title="Cuenta" icon={IconCuenta} description="Datos para entrar en Psique.">
             <dl className="grid gap-1 text-body-sm">
               <dt className="text-[11px] font-bold tracking-[0.12em] text-ink-faint uppercase">Usuario para entrar</dt>
               <dd className="text-ink">{user?.username ?? '—'}</dd>
@@ -426,7 +459,12 @@ export function SettingsPage() {
             {restrictedUntil ? <RestrictionIncidents /> : null}
           </SettingsSection>
 
-          <SettingsSection id="datos" title="Tus datos" description="Llévate una copia de todo lo que guardamos o borra la cuenta.">
+          <SettingsSection
+            id="datos"
+            title="Tus datos"
+            icon={IconTusDatos}
+            description="Llévate una copia de todo lo que guardamos o borra la cuenta."
+          >
             <AccountDataSettings announce={announce} />
           </SettingsSection>
         </div>

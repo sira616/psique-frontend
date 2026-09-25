@@ -20,6 +20,8 @@ export type StoryCard = {
   hook: string
   tone: string | null
   definition: CustomStoryDefinition | null
+  /** Portada de la historia; null en las que no tienen. */
+  coverUrl: string | null
   author: StoryAuthor
   isMine: boolean
   adult: boolean

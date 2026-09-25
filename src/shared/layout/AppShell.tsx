@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { LogOut, Menu, Settings, X } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { logout } from '@/api/auth'
 import { WalletBadge } from '@/features/economy/WalletBadge'
@@ -12,24 +11,47 @@ import { Wordmark } from '@/shared/layout/Wordmark'
 import { cn } from '@/shared/lib/utils'
 import { Avatar } from '@/shared/ui/Avatar'
 import { IconButton } from '@/shared/ui/IconButton'
+import {
+  Icon,
+  IconCerrar,
+  IconCerrarSesion,
+  IconConfiguracion,
+  IconCrearHistoria,
+  IconExplorar,
+  IconHistorias,
+  IconMenu,
+  IconMisHistorias,
+  IconPerfil,
+  IconRascaYGana,
+  IconDev,
+  type IconComponent,
+} from '@/shared/ui/icons'
 import { routes } from '@/router/paths'
 import { useAuthStore } from '@/stores/authStore'
 
 /** Contenedor común a cabecera y contenido: así ambos alinean sus bordes a cualquier ancho. */
 export const pageContainerClassName = 'mx-auto w-full max-w-screen-2xl px-md sm:px-6 lg:px-10'
 
-type NavItem = { to: string; label: string; end?: boolean }
+type NavItem = {
+  to: string
+  label: string
+  icon: IconComponent
+  end?: boolean
+  /** En la barra de escritorio va solo con icono; en el menú móvil siempre lleva texto. */
+  iconOnly?: boolean
+}
 
 const NAV_ITEMS: NavItem[] = [
-  { to: routes.characters, label: 'Historias', end: true },
-  { to: routes.explorar, label: 'Explorar' },
-  { to: routes.nuevaHistoria, label: 'Crear historia' },
-  { to: routes.rascaYGana, label: 'Rasca y gana' },
+  { to: routes.characters, label: 'Historias', icon: IconHistorias, end: true },
+  { to: routes.explorar, label: 'Explorar', icon: IconExplorar },
+  { to: routes.nuevaHistoria, label: 'Crear historia', icon: IconCrearHistoria },
+  { to: routes.misHistorias, label: 'Mis historias', icon: IconMisHistorias },
+  { to: routes.rascaYGana, label: 'Rasca y gana', icon: IconRascaYGana, iconOnly: true },
 ]
 
 function navLinkClassName({ isActive }: { isActive: boolean }) {
   return cn(
-    'inline-flex min-h-touch items-center rounded-lg px-3 text-body-sm font-semibold hover:bg-surf-2',
+    'inline-flex min-h-touch items-center gap-2 rounded-lg px-3 text-body-sm font-semibold hover:bg-surf-2',
     isActive
       ? 'text-ink underline decoration-[color:var(--ps-primary)] decoration-2 underline-offset-8'
       : 'text-ink-dim hover:text-ink',
@@ -39,19 +61,33 @@ function navLinkClassName({ isActive }: { isActive: boolean }) {
 /** La entrada Dev solo existe para cuentas dev; el backend cierra igualmente sus rutas. */
 function useNavItems(): NavItem[] {
   const isDev = useAuthStore((s) => Boolean(s.user?.isDev))
-  return isDev ? [...NAV_ITEMS, { to: routes.dev, label: 'Dev' }] : NAV_ITEMS
+  return isDev ? [...NAV_ITEMS, { to: routes.dev, label: 'Dev', icon: IconDev }] : NAV_ITEMS
 }
 
 function MainNav() {
   const navItems = useNavItems()
   return (
     // En móvil no cabe junto a la marca: allí va dentro del menú desplegable.
-    <nav aria-label="Principal" className="min-w-0 max-sm:hidden">
+    <nav aria-label="Principal" className="min-w-0 max-md:hidden">
       <ul className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none]">
         {navItems.map((item) => (
           <li key={item.to} className="shrink-0">
-            <NavLink to={item.to} end={item.end} className={navLinkClassName}>
-              {item.label}
+            <NavLink
+              to={item.to}
+              end={item.end}
+              // Por debajo de xl la barra va solo con iconos, así que el nombre accesible no
+              // puede depender del texto: lo pone siempre aria-label, y title lo enseña como
+              // tooltip mientras ese texto está oculto.
+              aria-label={item.label}
+              title={item.label}
+              // px-3 deja el objetivo en 40px; sin texto al lado hace falta llegar a 44.
+              className={(state) => cn(navLinkClassName(state), item.iconOnly ? 'px-[14px]' : 'px-[14px] xl:px-3')}
+            >
+              <Icon icon={item.icon} size={18} />
+              {/* Con los seis items y su texto la barra pide ~1060px: por debajo de xl se
+                  recortaba en silencio (scroll horizontal sin barra) y "Mis historias" no se
+                  veía. Solo icono hasta xl entra de sobra ya desde 768. */}
+              {item.iconOnly ? null : <span className="max-xl:hidden">{item.label}</span>}
             </NavLink>
           </li>
         ))}
@@ -71,15 +107,16 @@ function MobileMenu({ profileTo }: { profileTo: string | null }) {
     setOpen(false)
   }, [location.pathname])
 
+  // En el menú desplegable sí cabe el texto: aquí ninguna entrada va solo con icono.
   const items: NavItem[] = [
-    ...navItems,
-    ...(profileTo ? [{ to: profileTo, label: 'Tu perfil' }] : []),
-    { to: routes.configuracion, label: 'Configuración' },
+    ...navItems.map((item) => ({ ...item, iconOnly: false })),
+    ...(profileTo ? [{ to: profileTo, label: 'Tu perfil', icon: IconPerfil }] : []),
+    { to: routes.configuracion, label: 'Configuración', icon: IconConfiguracion },
   ]
 
   return (
     <div
-      className="sm:hidden"
+      className="md:hidden"
       onKeyDown={(event) => {
         if (event.key === 'Escape' && open) {
           setOpen(false)
@@ -94,7 +131,7 @@ function MobileMenu({ profileTo }: { profileTo: string | null }) {
         aria-controls="menu-movil"
         onClick={() => setOpen((v) => !v)}
       >
-        {open ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
+        {open ? <Icon icon={IconCerrar} size={18} /> : <Icon icon={IconMenu} size={18} />}
       </IconButton>
       {open ? (
         <nav
@@ -107,6 +144,7 @@ function MobileMenu({ profileTo }: { profileTo: string | null }) {
             {items.map((item) => (
               <li key={item.to}>
                 <NavLink to={item.to} end={item.end} className={(state) => cn(navLinkClassName(state), 'w-full')}>
+                  <Icon icon={item.icon} size={18} />
                   {item.label}
                 </NavLink>
               </li>
@@ -170,17 +208,17 @@ export function AppShell() {
               aria-label="Configuración"
               className={({ isActive }) =>
                 cn(
-                  'grid h-[38px] w-[38px] place-items-center rounded-[11px] border border-[color:var(--ps-line)] max-sm:hidden',
+                  'grid h-[38px] w-[38px] place-items-center rounded-[11px] border border-[color:var(--ps-line)] max-md:hidden',
                   isActive ? 'text-accent-text' : 'text-ink-dim hover:text-ink',
                 )
               }
               style={{ background: 'var(--ps-surf-1)' }}
             >
-              <Settings size={18} aria-hidden />
+              <Icon icon={IconConfiguracion} size={18} />
             </NavLink>
             <ThemeToggle />
             <IconButton label="Cerrar sesión" onClick={onLogout}>
-              <LogOut size={18} aria-hidden />
+              <Icon icon={IconCerrarSesion} size={18} />
             </IconButton>
             <MobileMenu profileTo={profileTo} />
           </div>

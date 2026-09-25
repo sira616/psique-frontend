@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, BookOpen, LockKeyhole, RotateCcw } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { bookQueryKey, rereadBook, type BookOut } from '@/api/books'
 import { activeRestriction, policyErrorOf, rememberRestriction } from '@/api/policy'
@@ -14,6 +13,7 @@ import { formatoMoneda } from '@/shared/economy/moneda'
 import { ApiError } from '@/shared/lib/apiClient'
 import type { Story } from '@/shared/lib/events'
 import { Button, ButtonLink } from '@/shared/ui/button'
+import { Icon, IconAvanzar, IconCapituloBloqueado, IconLeer, IconReleer } from '@/shared/ui/icons'
 import { useAuthStore } from '@/stores/authStore'
 
 type BookActionsProps = { book: BookOut }
@@ -92,7 +92,7 @@ export function BookActions({ book }: BookActionsProps) {
           {progress.affinity}
           {progress.chapterLocked ? (
             <span className="mt-1 flex items-center gap-1.5">
-              <LockKeyhole size={14} aria-hidden className="text-gold" />
+              <Icon icon={IconCapituloBloqueado} size={14} className="text-gold" />
               El siguiente capítulo espera a que lo desbloquees.
             </span>
           ) : null}
@@ -107,12 +107,12 @@ export function BookActions({ book }: BookActionsProps) {
             className="sm:min-w-56"
             onClick={() => guarded(() => navigate(routes.story(viewer.activeStoryId!)))}
           >
-            <BookOpen size={18} aria-hidden />
+            <Icon icon={IconLeer} size={18} />
             Continuar
           </Button>
         ) : continuing ? (
           <ButtonLink variant="brand" size="lg" className="sm:min-w-56" to={routes.story(viewer.activeStoryId!)}>
-            <BookOpen size={18} aria-hidden />
+            <Icon icon={IconLeer} size={18} />
             Continuar
           </ButtonLink>
         ) : (
@@ -123,7 +123,7 @@ export function BookActions({ book }: BookActionsProps) {
             disabled={pending || Boolean(restrictedUntil)}
             onClick={() => guarded(() => read.mutate())}
           >
-            <BookOpen size={18} aria-hidden />
+            <Icon icon={IconLeer} size={18} />
             {read.isPending ? 'Preparando la escena…' : readLabel(viewer.primaryAction.cost)}
           </Button>
         )}
@@ -135,7 +135,7 @@ export function BookActions({ book }: BookActionsProps) {
             disabled={pending || Boolean(restrictedUntil)}
             onClick={() => setConfirmingReread(true)}
           >
-            <RotateCcw size={18} aria-hidden />
+            <Icon icon={IconReleer} size={18} />
             Releer · {formatoMoneda(viewer.rereadCost)}
           </Button>
         ) : null}
@@ -172,7 +172,7 @@ export function BookActions({ book }: BookActionsProps) {
               onClick={() => guarded(() => reread.mutate())}
             >
               {reread.isPending ? 'Preparando la escena…' : `Sí, releer · ${formatoMoneda(viewer.rereadCost)}`}
-              <ArrowRight size={14} aria-hidden />
+              <Icon icon={IconAvanzar} size={14} />
             </Button>
           </div>
         </div>

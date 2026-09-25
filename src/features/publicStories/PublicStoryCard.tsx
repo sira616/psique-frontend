@@ -1,6 +1,7 @@
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { StoryCard } from '@/api/explore'
+import { StoryCover } from '@/features/customStories/StoryCover'
 import { AdultBadge } from '@/features/policy/AdultBadge'
 import { routes } from '@/router/paths'
 import { Avatar } from '@/shared/ui/Avatar'
@@ -35,67 +36,76 @@ export function PublicStoryCard({
   const isConcept = card.mode === 'concepto'
 
   return (
-    <Card className="flex h-full flex-col gap-3 p-5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {isConcept ? (
-          <Badge variant="outline" className="gap-1 text-accent-text">
-            <Sparkles size={12} aria-hidden />
-            Por descubrir
-          </Badge>
-        ) : (
-          <Badge variant="outline">Definida</Badge>
-        )}
-        {card.adult ? <AdultBadge /> : null}
-        {card.isMine && showAuthor ? <Badge variant="outline">Tuya</Badge> : null}
-      </div>
-
-      <Heading className="font-serif text-headline-lg text-ink">{card.title}</Heading>
-
-      {def ? (
-        <p className="text-body-sm font-semibold text-ink">
-          {def.name}
-          <span className="font-normal text-ink-faint"> · {def.age} años</span>
-        </p>
-      ) : null}
-
-      <p className="text-body-sm text-ink-dim">{card.hook}</p>
-
-      {def ? (
-        <div className="flex flex-wrap gap-1.5">
-          {traitsOf(def.personality).map((t) => (
-            <Badge key={t} variant="outline" className="normal-case tracking-normal">
-              {t}
+    <Card className="flex h-full flex-col">
+      <StoryCover
+        id={card.id}
+        title={card.title}
+        coverUrl={card.coverUrl}
+        mode={card.mode}
+        className="aspect-[16/9] w-full border-b border-[color:var(--ps-line)]"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {isConcept ? (
+            <Badge variant="outline" className="gap-1 text-accent-text">
+              <Sparkles size={12} aria-hidden />
+              Por descubrir
             </Badge>
-          ))}
+          ) : (
+            <Badge variant="outline">Definida</Badge>
+          )}
+          {card.adult ? <AdultBadge /> : null}
+          {card.isMine && showAuthor ? <Badge variant="outline">Tuya</Badge> : null}
         </div>
-      ) : null}
 
-      {card.tone ? (
-        <p className="text-body-sm text-ink-dim">
-          <span className="text-ink-faint">Tono: </span>
-          <span className="italic">{card.tone}</span>
-        </p>
-      ) : null}
-      <div className="flex-1" aria-hidden />
+        <Heading className="font-serif text-headline-lg text-ink">{card.title}</Heading>
 
-      {showAuthor ? (
-        <Link
-          to={routes.profile(card.author.handle)}
-          className="-mx-2 flex min-h-touch items-center gap-2.5 rounded-xl px-2 hover:bg-surf-2"
-        >
-          <Avatar name={card.author.displayName} url={card.author.avatarUrl} />
-          <span className="min-w-0 leading-tight">
-            <span className="block truncate text-body-sm font-semibold text-ink">{card.author.displayName}</span>
-            <span className="block truncate text-[13px] text-ink-dim">@{card.author.handle}</span>
-          </span>
-        </Link>
-      ) : null}
+        {def ? (
+          <p className="text-body-sm font-semibold text-ink">
+            {def.name}
+            <span className="font-normal text-ink-faint"> · {def.age} años</span>
+          </p>
+        ) : null}
 
-      {/* Leer (y cobrar) se decide en la página del libro, donde se ve el precio. */}
-      <ButtonLink variant="brand" className="w-full" to={routes.book(card.characterId)} aria-label={`Ver libro: ${card.title}`}>
-        Ver libro
-        <ArrowRight size={16} aria-hidden />
-      </ButtonLink>
+        <p className="text-body-sm text-ink-dim">{card.hook}</p>
+
+        {def ? (
+          <div className="flex flex-wrap gap-1.5">
+            {traitsOf(def.personality).map((t) => (
+              <Badge key={t} variant="outline" className="normal-case tracking-normal">
+                {t}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+
+        {card.tone ? (
+          <p className="text-body-sm text-ink-dim">
+            <span className="text-ink-faint">Tono: </span>
+            <span className="italic">{card.tone}</span>
+          </p>
+        ) : null}
+        <div className="flex-1" aria-hidden />
+
+        {showAuthor ? (
+          <Link
+            to={routes.profile(card.author.handle)}
+            className="-mx-2 flex min-h-touch items-center gap-2.5 rounded-xl px-2 hover:bg-surf-2"
+          >
+            <Avatar name={card.author.displayName} url={card.author.avatarUrl} />
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate text-body-sm font-semibold text-ink">{card.author.displayName}</span>
+              <span className="block truncate text-[13px] text-ink-dim">@{card.author.handle}</span>
+            </span>
+          </Link>
+        ) : null}
+
+        {/* Leer (y cobrar) se decide en la página del libro, donde se ve el precio. */}
+        <ButtonLink variant="brand" className="w-full" to={routes.book(card.characterId)} aria-label={`Ver libro: ${card.title}`}>
+          Ver libro
+          <ArrowRight size={16} aria-hidden />
+        </ButtonLink>
+      </div>
     </Card>
   )
 }

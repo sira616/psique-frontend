@@ -1,7 +1,7 @@
 import { useId } from 'react'
-import { Sparkles } from 'lucide-react'
 import type { QuickChoice } from '@/shared/lib/events'
 import { cn } from '@/shared/lib/utils'
+import { Icon, IconSugerencia } from '@/shared/ui/icons'
 
 type QuickActionBarProps = {
   choices: QuickChoice[]
@@ -63,7 +63,7 @@ export function QuickActionBar({
             )}
             style={{ background: 'var(--ps-surf-1)', border: '1px solid var(--ps-line-strong)' }}
           >
-            {i === 0 ? <Sparkles size={14} className="text-accent-text" aria-hidden /> : null}
+            {i === 0 ? <Icon icon={IconSugerencia} size={14} className="text-accent-text" /> : null}
             {choice.label}
           </button>
         ))}

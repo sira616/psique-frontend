@@ -5,6 +5,9 @@ export const routes = {
   privacidad: '/privacidad',
   characters: '/',
   nuevaHistoria: '/historias/nueva',
+  /** Lista y detalle de las historias propias: se editan y se gestionan solo aquí. */
+  misHistorias: '/mis-historias',
+  misHistoriaDetalle: (id: string) => `/mis-historias/${encodeURIComponent(id)}`,
   story: (storyId: string) => `/historia/${encodeURIComponent(storyId)}`,
   storyArchive: (storyId: string) => `/historia/${encodeURIComponent(storyId)}/archivo`,
   book: (bookId: string) => `/libro/${encodeURIComponent(bookId)}`,

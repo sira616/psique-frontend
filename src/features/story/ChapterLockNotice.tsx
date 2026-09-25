@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { LockKeyhole } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { unlockChapter } from '@/api/economy'
 import { applyBalance, useWallet } from '@/features/economy/useWallet'
@@ -7,6 +6,7 @@ import { routes } from '@/router/paths'
 import { formatoMoneda, MONEDA } from '@/shared/economy/moneda'
 import type { StoryState } from '@/shared/lib/events'
 import { Button } from '@/shared/ui/button'
+import { Icon, IconCapituloBloqueado } from '@/shared/ui/icons'
 
 type ChapterLockNoticeProps = {
   storyId: string
@@ -35,7 +35,7 @@ export function ChapterLockNotice({ storyId, cost, onUnlocked }: ChapterLockNoti
       style={{ background: 'var(--ps-surf-2)', border: '1px solid var(--ps-line-strong)' }}
     >
       <p className="flex items-start gap-2">
-        <LockKeyhole size={16} aria-hidden className="mt-0.5 shrink-0 text-gold" />
+        <Icon icon={IconCapituloBloqueado} size={16} className="mt-0.5 shrink-0 text-gold" />
         <span>
           <strong className="text-ink">El siguiente capítulo está bloqueado.</strong>{' '}
           <span className="text-ink-dim">

@@ -5,7 +5,7 @@ import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fieldErrorsFrom } from '@/api/customStories'
-import { CONTENT_MESSAGES, DEMO_USER, mockCharacters } from '@/mocks/fixtures'
+import { CONTENT_MESSAGES, DEMO_USER } from '@/mocks/fixtures'
 import { __resetCustomStories } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 import { CharactersPage } from '@/pages/Characters'
@@ -105,7 +105,11 @@ describe('crear historia definida', () => {
 
     expect(await screen.findByRole('heading', { name: 'Mis historias' })).toBeInTheDocument()
     expect(await within(ownSection()).findByRole('heading', { name: 'Faro de invierno' })).toBeInTheDocument()
-    expect(within(ownSection()).getByText('Irene Solís')).toBeInTheDocument()
+    // La tarjeta de la portada lleva al detalle, que es donde se edita.
+    expect(within(ownSection()).getByRole('link', { name: 'Faro de invierno' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/mis-historias/'),
+    )
   })
 
   it('muestra en role="alert" el 422 de contenido del backend', async () => {
@@ -162,107 +166,45 @@ describe('crear historia concepto', () => {
       'heading',
       { name: 'Dos relojeros rivales comparten taller por error' },
     )
-    expect(card.closest('li')).toHaveTextContent('Por descubrir')
+    expect(card.closest('li')).toHaveTextContent('Concepto')
   })
 })
 
-describe('Mis historias', () => {
+describe('Mis historias en la portada', () => {
   it('separa las secciones y el concepto no enseña campos vacíos', async () => {
     renderApp(routes.characters)
 
     const psique = await screen.findByRole('region', { name: 'Historias de Psique' })
     expect(within(psique).getByRole('heading', { name: 'Lucía Ferrer' })).toBeInTheDocument()
     const concept = (await within(ownSection()).findByRole('heading', { name: 'La carta del faro' })).closest('li')!
-    expect(concept).toHaveTextContent('Por descubrir')
+    expect(concept).toHaveTextContent('Concepto')
     expect(concept).not.toHaveTextContent(/null|undefined|años/)
     expect(screen.getByRole('link', { name: 'Crear historia' })).toHaveAttribute('href', routes.nuevaHistoria)
   })
 
+  /**
+   * La portada solo enseña las más recientes y lleva a la sección: publicar, editar y borrar se
+   * hacen en /mis-historias y en el detalle, para no tener dos interfaces para lo mismo.
+   */
+  it('es una tira de solo lectura con enlace a la sección', async () => {
+    renderApp(routes.characters)
+
+    const verTodas = await within(ownSection()).findByRole('link', { name: 'Ver todas (2)' })
+    expect(verTodas).toHaveAttribute('href', routes.misHistorias)
+    expect(within(ownSection()).queryByRole('switch')).not.toBeInTheDocument()
+    expect(within(ownSection()).queryByRole('button')).not.toBeInTheDocument()
+    expect(within(ownSection()).getByRole('link', { name: 'La carta del faro' })).toHaveAttribute(
+      'href',
+      routes.misHistoriaDetalle('1084427a03094ac590adbb943a02f801'),
+    )
+  })
+
   it('muestra un estado vacío amable si no hay propias', async () => {
-    server.use(http.get('/api/characters', () => HttpResponse.json(mockCharacters)))
+    server.use(http.get('/api/custom-stories', () => HttpResponse.json([])))
     renderApp(routes.characters)
 
-    expect(await within(await screen.findByRole('region', { name: 'Mis historias' })).findByText(/Todavía no has creado/))
-      .toBeInTheDocument()
-  })
-
-  it('pide confirmación, gestiona el foco y borra', async () => {
-    const user = userEvent.setup()
-    renderApp(routes.characters)
-
-    const trigger = await screen.findByRole('button', { name: 'Borrar La carta del faro' })
-    await user.click(trigger)
-    expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus()
-    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
-    expect(screen.getByRole('button', { name: 'Borrar La carta del faro' })).toHaveFocus()
-
-    await user.click(screen.getByRole('button', { name: 'Borrar La carta del faro' }))
-    expect(screen.getByRole('group', { name: /¿Borrar «La carta del faro»\?/ })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Sí, borrar' }))
-
-    await waitFor(() => expect(screen.queryByRole('heading', { name: 'La carta del faro' })).not.toBeInTheDocument())
-    expect(screen.getByRole('heading', { name: 'Mis historias' })).toHaveFocus()
-    expect(within(ownSection()).getByRole('heading', { name: 'Café a medianoche' })).toBeInTheDocument()
-  })
-
-  it('cambia una historia a pública al momento y lo confirma', async () => {
-    const user = userEvent.setup()
-    let body: unknown
-    server.use(
-      http.patch('/api/custom-stories/:id', async ({ request }) => {
-        body = await request.clone().json()
-        return undefined
-      }),
-    )
-    renderApp(routes.characters)
-
-    const toggle = await screen.findByRole('switch', { name: 'Pública: La carta del faro' })
-    await waitFor(() => expect(toggle).toBeEnabled())
-    expect(toggle).toHaveAttribute('aria-checked', 'false')
-    expect(screen.getByRole('switch', { name: 'Pública: Café a medianoche' })).toHaveAttribute('aria-checked', 'true')
-
-    await user.click(toggle)
-    expect(toggle).toHaveAttribute('aria-checked', 'true')
-    expect(await within(toggle.closest('li')!).findByText('Ahora es pública y aparece en Explorar.')).toBeInTheDocument()
-    expect(body).toEqual({ isPublic: true })
-  })
-
-  it('si el servidor falla, el interruptor vuelve atrás y avisa', async () => {
-    const user = userEvent.setup()
-    server.use(
-      http.patch('/api/custom-stories/:id', () =>
-        HttpResponse.json({ detail: 'Historia propia no encontrada.' }, { status: 404 }),
-      ),
-    )
-    renderApp(routes.characters)
-
-    const toggle = await screen.findByRole('switch', { name: 'Pública: La carta del faro' })
-    await waitFor(() => expect(toggle).toBeEnabled())
-    await user.click(toggle)
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Historia propia no encontrada.')
-    expect(toggle).toHaveAttribute('aria-checked', 'false')
-  })
-
-  it('cambia "Primera lectura gratis" con un PATCH solo de ese campo', async () => {
-    const user = userEvent.setup()
-    let body: unknown
-    server.use(
-      http.patch('/api/custom-stories/:id', async ({ request }) => {
-        body = await request.clone().json()
-        return undefined
-      }),
-    )
-    renderApp(routes.characters)
-
-    const toggle = await screen.findByRole('switch', { name: 'Primera lectura gratis: La carta del faro' })
-    await waitFor(() => expect(toggle).toBeEnabled())
-    expect(toggle).toHaveAttribute('aria-checked', 'true')
-
-    await user.click(toggle)
-    expect(toggle).toHaveAttribute('aria-checked', 'false')
-    expect(await within(toggle.closest('li')!).findByText(/cuesta óbolos desde la primera vez/)).toBeInTheDocument()
-    expect(body).toEqual({ freeFirstRead: false })
+    expect(await within(ownSection()).findByText(/Todavía no has creado/)).toBeInTheDocument()
+    expect(within(ownSection()).queryByRole('link', { name: /Ver todas/ })).not.toBeInTheDocument()
   })
 
   it('las tarjetas enlazan al libro y no empiezan partidas', async () => {
@@ -275,7 +217,7 @@ describe('Mis historias', () => {
     )
     renderApp(routes.characters)
 
-    const own = await screen.findByRole('link', { name: 'Ver libro: La carta del faro' })
+    const own = await screen.findByRole('link', { name: 'Ver La carta del faro como lector' })
     expect(own).toHaveAttribute('href', '/libro/custom%3A1084427a03094ac590adbb943a02f801')
     expect(screen.getByRole('link', { name: 'Ver libro: Lucía Ferrer' })).toHaveAttribute('href', '/libro/lucia')
     expect(screen.queryByRole('button', { name: /Empezar historia|Descubrir historia/ })).not.toBeInTheDocument()

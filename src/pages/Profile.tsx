@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { BookOpen, CalendarDays, EyeOff, Link2, Pencil, UserRoundX } from 'lucide-react'
+import { CalendarDays, EyeOff, Link2, Pencil, UserRoundX } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchProfile, profileQueryKey, type PublicProfile, type ReadingItem } from '@/api/profile'
+import { StoryCover } from '@/features/customStories/StoryCover'
 import { PublicStoryCard, cardGridClassName } from '@/features/publicStories/PublicStoryCard'
 import { routes } from '@/router/paths'
 import { ApiError } from '@/shared/lib/apiClient'
@@ -101,8 +102,15 @@ function ReadingList({ items }: { items: ReadingItem[] }) {
         // Se puede tener más de una partida con el mismo personaje y no llega id de partida.
         <li key={`${item.characterId}-${item.updatedAt ?? ''}-${index}`}>
           <Card className="flex h-full flex-col gap-2 p-4">
-            <div className="flex items-start gap-2">
-              <BookOpen size={16} className="mt-1 text-accent-text" aria-hidden />
+            <div className="flex items-start gap-3">
+              <StoryCover
+                id={item.characterId}
+                title={item.title}
+                coverUrl={item.coverUrl}
+                mode={item.mode}
+                className="h-14 w-14 shrink-0 rounded-xl"
+                initialClassName="text-[22px]"
+              />
               <div className="min-w-0">
                 <h3 className="font-semibold text-ink">
                   <Link to={routes.book(item.characterId)} className="underline-offset-2 hover:underline">
