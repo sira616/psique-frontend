@@ -2,8 +2,9 @@
 
 [![CI](https://github.com/sira616/psique-frontend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sira616/psique-frontend/actions/workflows/ci.yml)
 
-Vite + React 19 + TypeScript + Tailwind 4. Chat de historias románticas con streaming,
-indicador de fase y afinidad y sugerencias de acción.
+Vite + React 19 + TypeScript + Tailwind 4. Narrativa interactiva con IA y moderación:
+historias con streaming, libros y historias propias, exploración pública, perfiles,
+economía de monedas y apelación de incidentes.
 
 El frontend **no decide nada** del estado de la historia: fase, afinidad y sugerencias
 llegan del backend (`psique-backend`) en el evento `state` del SSE. Aquí solo se pintan.
@@ -32,14 +33,28 @@ GitHub Actions (`.github/workflows/ci.yml`) pasa typecheck, vitest, build y el e
 
 ```
 src/
-  api/                auth.ts, stories.ts
-  features/story/     useStoryStream (SSE), StoryStatus, MarkdownStream, chat/*
-  features/auth/      AuthShell
-  pages/              Login, Register, Characters, Story, NotFound
-  router/             rutas y RequireAuth
+  api/                un módulo por dominio: auth, stories, books, customStories, explore,
+                      profile, account, economy, incidents, policy, legal, dev
+  features/           story (SSE, transcript, chat/*), book (ficha, reseñas, recomendados),
+                      customStories (crear, editar, visibilidad, estadísticas),
+                      publicStories (tarjetas de explorar), profile, account (tus datos),
+                      economy (monedero, rasca y gana), policy (aviso y puerta +18),
+                      incidents (restricciones y apelaciones), legal (términos y
+                      privacidad), auth, dev (herramientas y moderación)
+  pages/              17 páginas, cargadas por ruta:
+                        acceso    Login, Register
+                        jugar     Characters, Story, StoryArchive
+                        libros    Book, Explore, Profile
+                        propias   CreateStory, MyStories, MyStoryDetail
+                        cuenta    Settings, ScratchGame, Legal
+                        dev       Dev, DevModeration (cola de moderación)
+                        otras     NotFound
+  router/             paths.ts (rutas tipadas), routes.tsx y RequireAuth
+  content/legal/      términos y privacidad en Markdown, con versión
   shared/lib/         apiClient (refresh compartido), events (contrato + parser SSE),
-                      colorContrast + wcagPalette, errorBoundary
+                      colorContrast + wcagPalette, errorBoundary, media
   shared/ui, layout/  componentes base, AppShell, ThemeToggle, Wordmark
+  shared/economy/     formato de moneda
   stores/             authStore (tokens en memoria), uiStore (tema)
   mocks/              handlers MSW, fixtures y generador SSE
   styles/tokens.css   paleta clara/oscura
